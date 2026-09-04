@@ -28,23 +28,19 @@ Parents can create a family namespace (e.g. `smithfam.eth`), distribute custom g
 
 ### 👤 1. Frictionless Onboarding (Powered by Privy)
 - **One-Tap Sign-In:** Onboard family members via email, SMS, socials, or passkeys without requiring seed phrases.
-- **Embedded MPC Wallets:** Non-custodial multi-party computation ensures keys are sharded securely across devices with zero single point of failure.
 - **ERC-4337 Account Abstraction:** Smart accounts with gas sponsorship via paymasters—users never worry about holding raw ETH for gas.
 
 ### 🏷️ 2. ENSv2 Family Subname Issuance
 - **Human-Readable Identities:** Replace confusing hex addresses with readable handles (`alex.smithfam.eth`, `mom.smithfam.eth`, `vault.smithfam.eth`).
 - **Parent-Enforced Policies:** Parent nodes retain lifecycle rules and permission management over child subnames.
-- **Gasless Offchain & L2 Resolution:** Fast, low-cost subname minting and resolution via ERC-3668 (CCIP-Read).
 
 ### ⏳ 3. Automated Allowances & Guardrails
 - **Automated Drops:** Schedule weekly or monthly allowance transfers directly to family member sub-accounts.
 - **Granular Spending Limits:** Set custom weekly budgets (e.g., $50/week) with automatic spend resets.
-- **DeFi & Protocol Locks:** Restrict or grant access to external smart contracts and swaps on a per-member basis.
 
 ### 🛡️ 4. World ID Proof-of-Humanity Step-Up Auth
 - **Biometric Selfie Check:** Verify unique human identity during high-value transfers or policy modifications.
 - **1:1 Zero-Knowledge Proofs (ZK-SNARKs):** No biometric data or selfies are ever stored onchain or transmitted to servers.
-- **Anti-Sybil & Guardian Recovery:** Prevent bot takeovers and enable trusted guardian-assisted account recovery.
 
 ### 🔄 5. In-App Swaps & Portfolio Management
 - **Decentralized Swaps:** Effortlessly trade between ETH, USDC, and other top tokens directly inside the app.
