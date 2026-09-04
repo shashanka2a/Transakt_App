@@ -1,0 +1,30 @@
+{
+  "expo": {
+    "name": "Transakt",
+    "slug": "transakt",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#18140F"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.transakt.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#18140F"
+      },
+      "package": "com.transakt.app"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    }
+  }
+}

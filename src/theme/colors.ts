@@ -1,0 +1,89 @@
+export interface ThemeColors {
+  bg: string
+  surface: string
+  raised: string
+  border: string
+  border2: string
+  fg: string
+  fg2: string
+  fg3: string
+  accent: string
+  accentFg: string
+  accentDim: string
+  mt6: string
+  mt10: string
+  mt16: string
+  mb20: string
+  mb30: string
+  dt5: string
+  db25: string
+  cardShadow: string
+  ctaGlow: string
+  overlay: string
+  inputBg: string
+  logoFg: string
+  success: string
+  danger: string
+  amber: string
+  uniswapPink: string
+}
+
+export const lightColors: ThemeColors = {
+  bg: '#F0EBE0',
+  surface: '#FBF8F1',
+  raised: '#EEE8DC',
+  border: '#D9D1C5',
+  border2: '#C4BBB0',
+  fg: '#1A1410',
+  fg2: '#5A524A',
+  fg3: '#8E877D',
+  accent: '#1A5C3A',
+  accentFg: '#FFFFFF',
+  accentDim: '#134830',
+  mt6: 'rgba(26,92,58,0.07)',
+  mt10: 'rgba(26,92,58,0.11)',
+  mt16: 'rgba(26,92,58,0.17)',
+  mb20: 'rgba(26,92,58,0.23)',
+  mb30: 'rgba(26,92,58,0.32)',
+  dt5: 'rgba(180,40,50,0.05)',
+  db25: 'rgba(180,40,50,0.20)',
+  cardShadow: 'rgba(80,60,40,0.08)',
+  ctaGlow: 'rgba(26,92,58,0.38)',
+  overlay: 'rgba(20,16,10,0.65)',
+  inputBg: '#EEE8DC',
+  logoFg: '#1A5C3A',
+  success: '#1DB563',
+  danger: '#B4282F',
+  amber: '#F5AC37',
+  uniswapPink: '#FF007A',
+}
+
+export const darkColors: ThemeColors = {
+  bg: '#18140F',
+  surface: '#211C16',
+  raised: '#2A2319',
+  border: '#362D22',
+  border2: '#443829',
+  fg: '#F0E8D8',
+  fg2: '#9E9080',
+  fg3: '#675C50',
+  accent: '#00FF87',
+  accentFg: '#0D0E11',
+  accentDim: '#00CC6A',
+  mt6: 'rgba(0,255,135,0.06)',
+  mt10: 'rgba(0,255,135,0.10)',
+  mt16: 'rgba(0,255,135,0.16)',
+  mb20: 'rgba(0,255,135,0.20)',
+  mb30: 'rgba(0,255,135,0.30)',
+  dt5: 'rgba(255,71,87,0.05)',
+  db25: 'rgba(255,71,87,0.25)',
+  cardShadow: 'rgba(0,0,0,0.35)',
+  ctaGlow: 'rgba(0,255,135,0.30)',
+  overlay: 'rgba(10,8,5,0.82)',
+  inputBg: '#2A2319',
+  logoFg: '#00FF87',
+  success: '#1DB563',
+  danger: '#FF4757',
+  amber: '#FFB830',
+  uniswapPink: '#FF007A',
+}

@@ -1,0 +1,10 @@
+{
+  "description": "Effortlessly manage and transfer funds with a sleek mobile fintech app designed for families, enabling secure payments and sub-account management.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
