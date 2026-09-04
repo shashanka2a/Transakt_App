@@ -1,15 +1,11 @@
 # 🛡️ Transakt — Crypto for the Whole Family. Made Simple.
 
 <p align="center">
-  <img src="./public/banner.png" alt="Transakt Banner" width="100%" />
-</p>
-
-<p align="center">
   <strong>Non-custodial family treasury, ENSv2 subname issuance, automated allowances, and World ID verification.</strong>
 </p>
 
 <p align="center">
-  <a href="https://transakt.family"><img src="https://img.shields.io/badge/Website-transakt.family-1A5C3A?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Website" /></a>
+  <a href="https://transakt.online"><img src="https://img.shields.io/badge/Website-transakt.online-1A5C3A?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Website" /></a>
   <a href="#tech-stack"><img src="https://img.shields.io/badge/Network-ETH%20Sepolia-627EEA?style=for-the-badge&logo=ethereum&logoColor=white" alt="Ethereum Sepolia" /></a>
   <a href="#security--architecture"><img src="https://img.shields.io/badge/Smart%20Auth-Privy%20MPC-22C55E?style=for-the-badge" alt="Privy Auth" /></a>
   <a href="#security--architecture"><img src="https://img.shields.io/badge/Identity-World%20ID%20ZK-8B5CF6?style=for-the-badge" alt="World ID" /></a>
