@@ -53,26 +53,27 @@ Parents can create a family namespace (e.g. `smithfam.eth`), distribute custom g
 ```mermaid
 graph TD
     User([👨‍👩‍👧‍👦 Family Members]) -->|Web / Mobile App| UI[Transakt Client]
-    
-    subgraph "Authentication & Key Management"
-        UI -->|Social / Passkey Login| Privy[Privy Smart Auth & MPC]
-        Privy -->|ERC-4337 UserOp| AA[Smart Contract Account]
+
+    subgraph Auth["Authentication & Key Management"]
+        Privy[Privy Smart Auth & MPC] -->|ERC-4337 UserOp| AA[Smart Contract Account]
     end
 
-    subgraph "Identity & Resolution"
-        UI -->|Issue / Resolve Subnames| ENS[ENSv2 & CCIP-Read ERC-3668]
-        ENS -->|Parent/Child Policy| EAC[Enhanced Access Control]
+    subgraph Identity["Identity & Resolution"]
+        ENS[ENSv2 & CCIP-Read ERC-3668] -->|Parent/Child Policy| EAC[Enhanced Access Control]
     end
 
-    subgraph "Verification & Security"
-        UI -->|Step-Up Auth / High-Value Tx| WorldID[World ID ZK Selfie Check]
-        WorldID -->|ZK-SNARK Proof| AA
+    subgraph Security["Verification & Security"]
+        WorldID[World ID ZK Selfie Check] -->|ZK-SNARK Proof| AA
     end
 
-    subgraph "Execution Layer"
+    subgraph Execution["Execution Layer"]
         AA -->|Sponsored Gas Tx| Paymaster[ERC-4337 Paymaster Relay]
         Paymaster -->|Onchain Settlement| Sepolia[Ethereum Sepolia / L2]
     end
+
+    UI -->|Social / Passkey Login| Privy
+    UI -->|Issue / Resolve Subnames| ENS
+    UI -->|Step-Up Auth / High-Value Tx| WorldID
 ```
 
 ### Core Technologies
