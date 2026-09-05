@@ -122,14 +122,12 @@ const nodes = [
 
 interface Props {
   onNavigate: (t: Tab) => void
-  onOpenCard: () => void
   onOpenRequest: () => void
   onOpenSwap: () => void
 }
 
 export default function HomeTab({
   onNavigate,
-  onOpenCard: _onOpenCard,
   onOpenRequest,
   onOpenSwap,
 }: Props) {

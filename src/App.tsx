@@ -15,7 +15,6 @@ import SendTab from './tabs/SendTab'
 import BiometricModal from './tabs/BiometricModal'
 import PermissionsTab from './tabs/PermissionsTab'
 import ActivityTab from './tabs/ActivityTab'
-import CardView from './tabs/CardView'
 import RequestModal from './tabs/RequestModal'
 import SwapModal from './tabs/SwapModal'
 import NavBar from './components/NavBar'
@@ -38,7 +37,6 @@ function AppShell() {
   const [flow, setFlow] = useState<AppFlow>('loading')
   const [activeTab, setActiveTab] = useState<Tab>('home')
   const [showBio, setShowBio] = useState(false)
-  const [showCard, setShowCard] = useState(false)
   const [showRequest, setShowRequest] = useState(false)
   const [showSwap, setShowSwap] = useState(false)
 
@@ -77,7 +75,6 @@ function AppShell() {
             {activeTab === 'home' && (
               <HomeTab
                 onNavigate={setActiveTab}
-                onOpenCard={() => setShowCard(true)}
                 onOpenRequest={() => setShowRequest(true)}
                 onOpenSwap={() => setShowSwap(true)}
               />
@@ -106,7 +103,6 @@ function AppShell() {
             />
           )}
 
-          {showCard && <CardView onClose={() => setShowCard(false)} />}
           {showRequest && <RequestModal onClose={() => setShowRequest(false)} />}
           {showSwap && <SwapModal onClose={() => setShowSwap(false)} />}
         </View>
