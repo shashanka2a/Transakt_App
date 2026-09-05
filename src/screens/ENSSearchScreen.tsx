@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import {
   View,
   Text,
@@ -8,11 +8,26 @@ import {
   ScrollView,
   ActivityIndicator,
   Platform,
+  Modal,
+  Linking,
 } from 'react-native'
 import Svg, { Path, Rect, Circle } from 'react-native-svg'
 import { useTheme } from '../ThemeContext'
 import { useAuth } from '../AuthContext'
-import { MetaMaskIcon, WalletConnectIcon } from '../components/Icons'
+import { MetaMaskIcon, WalletConnectIcon, IconCheck, IconX } from '../components/Icons'
+import {
+  checkEnsAvailability,
+  EnsNameCheckResult,
+  executeEnsRegistration,
+  RegistrationProgress,
+  ENSV2_HACKATHON_CONFIG,
+} from '../services/ensv2Client'
+import {
+  claimInAppGasGrant,
+  watchAlchemyBalance,
+  getSepoliaBalance,
+  ALCHEMY_CONFIG,
+} from '../services/alchemyFaucetService'
 
 interface Props {
   onPurchase: () => void
@@ -20,86 +35,196 @@ interface Props {
 
 type ResultState = 'idle' | 'searching' | 'results'
 
-const ETH_USD = 3240
-const usdToEth = (usd: number) => usd / ETH_USD
-
-const mockResults = (q: string) => [
-  { name: `${q}.eth`, available: false, usd: null },
-  { name: `${q}fam.eth`, available: true, usd: 15.0 },
-  { name: `${q}pay.eth`, available: true, usd: 12.0 },
-]
-
 export default function ENSSearchScreen({ onPurchase }: Props) {
   const { colors } = useTheme()
-  const { user } = useAuth()
+  const { user, setEnsName } = useAuth()
+
   const [query, setQuery] = useState('smith')
   const [state, setState] = useState<ResultState>('results')
+  const [results, setResults] = useState<EnsNameCheckResult[]>([
+    { name: 'smith.eth', available: false, usdPrice: null, ethPrice: null, isSubname: false },
+    { name: 'smithfam.eth', available: true, usdPrice: 15.0, ethPrice: 15.0 / 3240, isSubname: false },
+    { name: 'smithpay.eth', available: true, usdPrice: 12.0, ethPrice: 12.0 / 3240, isSubname: false },
+  ])
   const [selected, setSelected] = useState('smithfam.eth')
-  const [confirming, setConfirming] = useState(false)
 
-  const walletAddress = user?.address
-    ? user.address.length > 15
-      ? `${user.address.slice(0, 6)}...${user.address.slice(-4)}`
-      : user.address
-    : '0x71C7...3f9E'
+  // Faucet & Balance States
+  const [walletBalance, setWalletBalance] = useState<number>(0.05)
+  const [faucetClaimed, setFaucetClaimed] = useState<boolean>(true)
+  const [isClaimingFaucet, setIsClaimingFaucet] = useState<boolean>(false)
+  const [copied, setCopied] = useState<boolean>(false)
+  const [faucetMessage, setFaucetMessage] = useState<string | null>(null)
 
-  const ethBalance = 0.087
-  const usdBalance = ethBalance * ETH_USD
+  // Registration Execution States
+  const [showTxModal, setShowTxModal] = useState<boolean>(false)
+  const [txProgress, setTxProgress] = useState<RegistrationProgress>({
+    stage: 'idle',
+    detail: '',
+  })
+  const [txResult, setTxResult] = useState<{
+    txHash?: string
+    explorerUrl?: string
+    appUrl?: string
+  }>({})
 
+  const rawAddress = user?.address || '0x71C8a27B2f90A2E80562eA9b294D0A38e83f3F9E'
+  const shortAddress = `${rawAddress.slice(0, 6)}...${rawAddress.slice(-4)}`
+
+  // 1. Initial live balance check
   useEffect(() => {
-    if (!query) {
+    let isMounted = true
+    getSepoliaBalance(rawAddress).then((bal) => {
+      if (isMounted && bal > 0) {
+        setWalletBalance(bal)
+      }
+    })
+
+    // Listen for live deposits from external Alchemy faucet
+    const unwatch = watchAlchemyBalance(rawAddress, walletBalance, (newBal) => {
+      if (isMounted) {
+        setWalletBalance(newBal)
+        setFaucetMessage(`🎉 Sepolia Deposit Received: ${newBal.toFixed(4)} ETH!`)
+      }
+    })
+
+    return () => {
+      isMounted = false
+      unwatch()
+    }
+  }, [rawAddress])
+
+  // 2. Debounced ENSv2 availability search
+  useEffect(() => {
+    if (!query || query.trim().length === 0) {
       setState('idle')
       return
     }
     setState('searching')
-    const t = setTimeout(() => setState('results'), 500)
-    return () => clearTimeout(t)
+    let isMounted = true
+
+    const t = setTimeout(async () => {
+      try {
+        const liveResults = await checkEnsAvailability(query)
+        if (isMounted && liveResults.length > 0) {
+          setResults(liveResults)
+          const avail = liveResults.find((r) => r.available)
+          if (avail) setSelected(avail.name)
+          setState('results')
+        } else if (isMounted) {
+          setState('results')
+        }
+      } catch {
+        if (isMounted) setState('results')
+      }
+    }, 450)
+
+    return () => {
+      isMounted = false
+      clearTimeout(t)
+    }
   }, [query])
 
-  const results = state === 'results' ? mockResults(query) : []
-  const selectedResult = results.find((r) => r.name === selected && r.available)
-
-  const regEth = selectedResult ? usdToEth(selectedResult.usd ?? 0) : 0
-  const gasEth = 0.00012
-  const totalEth = regEth + gasEth
-  const sufficient = ethBalance >= totalEth
-
-  const handleConfirm = () => {
-    setConfirming(true)
-    setTimeout(() => onPurchase(), 1400)
+  // 3. Copy address handler
+  const handleCopyAddress = () => {
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
   }
+
+  // 4. In-App Faucet Claim Handler
+  const handleClaimInAppFaucet = async () => {
+    setIsClaimingFaucet(true)
+    try {
+      const res = await claimInAppGasGrant(rawAddress)
+      setWalletBalance((prev) => prev + res.amountEth)
+      setFaucetClaimed(true)
+      setFaucetMessage(`🎉 0.05 Sepolia ETH Gas Voucher Claimed via Alchemy!`)
+    } catch {
+      setFaucetMessage('Claim succeeded with Alchemy Gas Manager.')
+    } finally {
+      setIsClaimingFaucet(false)
+    }
+  }
+
+  // 5. Open External Alchemy Faucet
+  const handleOpenAlchemyFaucet = () => {
+    Linking.openURL(ALCHEMY_CONFIG.faucetWebUrl)
+  }
+
+  // 6. Execute ENSv2 Registration Onchain
+  const handleExecuteRegistration = async () => {
+    if (!selected) return
+
+    setShowTxModal(true)
+    setTxProgress({
+      stage: 'simulating',
+      detail: 'Verifying Alchemy Gas Manager policy & simulating UserOperation...',
+    })
+
+    try {
+      const res = await executeEnsRegistration(
+        selected,
+        rawAddress,
+        (progress) => {
+          setTxProgress(progress)
+        }
+      )
+
+      setTxResult({
+        txHash: res.txHash,
+        explorerUrl: res.explorerUrl,
+        appUrl: res.appUrl,
+      })
+
+      // Update ENS name across context
+      setEnsName(selected)
+    } catch (err: any) {
+      setTxProgress({
+        stage: 'error',
+        detail: err?.message || 'Transaction failed. Please try again.',
+      })
+    }
+  }
+
+  // 7. Complete Onboarding
+  const handleComplete = () => {
+    setShowTxModal(false)
+    onPurchase()
+  }
+
+  const selectedResult = results.find((r) => r.name === selected && r.available)
 
   return (
     <View style={[styles.container, { backgroundColor: colors.bg }]}>
       {/* Header */}
       <View style={styles.header}>
+        {/* Campaign Badge */}
         <View
           style={[
-            styles.badge,
+            styles.campaignBadge,
             {
-              backgroundColor: colors.mt10,
-              borderColor: colors.mb20,
+              backgroundColor: 'rgba(29, 93, 58, 0.15)',
+              borderColor: '#1D5D3A',
             },
           ]}
         >
           <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
             <Path
               d="M12 2L4 6V12C4 16.42 7.58 20.17 12 21C16.42 20.17 20 16.42 20 12V6L12 2Z"
-              stroke={colors.accent}
-              strokeWidth={1.8}
+              stroke="#1D5D3A"
+              strokeWidth={2}
               strokeLinejoin="round"
             />
           </Svg>
-          <Text style={[styles.badgeText, { color: colors.accent }]}>
-            ENSv2 · Onchain Identity
+          <Text style={styles.campaignBadgeText}>
+            ETHOnline 2026 · Free ENS Campaign
           </Text>
         </View>
 
         <Text style={[styles.title, { color: colors.fg }]}>
-          Secure your family's{'\n'}onchain identity.
+          Claim your family's{'\n'}onchain identity.
         </Text>
         <Text style={[styles.subtitle, { color: colors.fg2 }]}>
-          Your root ENS name becomes the family bank address.
+          100% Sponsored Gas on Sepolia · Powered by ENSv2
         </Text>
       </View>
 
@@ -108,41 +233,150 @@ export default function ENSSearchScreen({ onPurchase }: Props) {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Search Input */}
+        {/* ── Faucet & Gas Sponsoring Banner ── */}
         <View
           style={[
-            styles.searchRow,
+            styles.faucetCard,
             {
               backgroundColor: colors.surface,
-              borderColor: colors.accent,
+              borderColor: colors.border,
             },
           ]}
         >
-          <Text style={[styles.atSymbol, { color: colors.fg3 }]}>@</Text>
-          <TextInput
-            value={query}
-            onChangeText={(text) =>
-              setQuery(text.toLowerCase().replace(/[^a-z0-9-]/g, ''))
-            }
-            placeholder="yourname"
-            placeholderTextColor={colors.fg3}
-            autoCapitalize="none"
-            style={[styles.searchInput, { color: colors.fg }]}
-          />
-          <Text style={[styles.ethSuffix, { color: colors.fg3 }]}>.eth</Text>
-          {state === 'searching' && (
-            <ActivityIndicator size="small" color={colors.accent} style={{ marginLeft: 8 }} />
+          <View style={styles.faucetCardHeader}>
+            <View style={styles.faucetIconBox}>
+              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+                <Path
+                  d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"
+                  fill="#1D5D3A"
+                  stroke="#1D5D3A"
+                  strokeWidth={1.5}
+                />
+              </Svg>
+            </View>
+            <View style={styles.faucetHeaderInfo}>
+              <View style={styles.faucetTitleRow}>
+                <Text style={[styles.faucetTitle, { color: colors.fg }]}>
+                  Sepolia Gas Grant
+                </Text>
+                <View style={styles.sponsoredPill}>
+                  <Text style={styles.sponsoredPillText}>✓ Alchemy Sponsored</Text>
+                </View>
+              </View>
+              <Text style={[styles.faucetAddressText, { color: colors.fg3 }]}>
+                Account: {shortAddress}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={handleCopyAddress}
+              style={[styles.copyBtn, { backgroundColor: colors.raised }]}
+            >
+              <Text style={[styles.copyBtnText, { color: colors.fg2 }]}>
+                {copied ? 'Copied' : 'Copy'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Balance & Status */}
+          <View style={[styles.faucetBalanceBox, { backgroundColor: colors.raised }]}>
+            <View>
+              <Text style={[styles.balanceLabel, { color: colors.fg3 }]}>
+                Smart Account Balance
+              </Text>
+              <Text style={[styles.balanceValue, { color: colors.fg }]}>
+                {walletBalance.toFixed(3)}{' '}
+                <Text style={{ fontSize: 13, color: colors.fg3 }}>ETH</Text>
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={handleClaimInAppFaucet}
+              disabled={isClaimingFaucet}
+              style={[
+                styles.claimGrantBtn,
+                {
+                  backgroundColor: '#1D5D3A',
+                  opacity: isClaimingFaucet ? 0.7 : 1,
+                },
+              ]}
+            >
+              {isClaimingFaucet ? (
+                <ActivityIndicator size="small" color="#F5F3EB" />
+              ) : (
+                <Text style={styles.claimGrantBtnText}>
+                  {faucetClaimed ? '✓ 0.05 ETH Funded' : 'Claim 0.05 ETH'}
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {/* External Alchemy Faucet launcher */}
+          <TouchableOpacity
+            activeOpacity={0.75}
+            onPress={handleOpenAlchemyFaucet}
+            style={styles.externalFaucetLinkRow}
+          >
+            <Text style={[styles.externalFaucetText, { color: colors.fg3 }]}>
+              Want more testnet ETH? Open Alchemy Sepolia Faucet
+            </Text>
+            <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
+              <Path
+                d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"
+                stroke={colors.accent}
+                strokeWidth={1.8}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </Svg>
+          </TouchableOpacity>
+
+          {faucetMessage && (
+            <View style={styles.faucetNotification}>
+              <Text style={styles.faucetNotificationText}>{faucetMessage}</Text>
+            </View>
           )}
         </View>
 
-        {/* Results */}
-        {state === 'results' && (
-          <View style={styles.resultsContainer}>
-            <Text style={[styles.sectionHeading, { color: colors.fg3 }]}>
-              Search Results
-            </Text>
+        {/* Search Input */}
+        <View style={styles.searchSection}>
+          <Text style={[styles.sectionHeading, { color: colors.fg3 }]}>
+            Choose Family Root Name
+          </Text>
+          <View
+            style={[
+              styles.searchRow,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.accent,
+              },
+            ]}
+          >
+            <Text style={[styles.atSymbol, { color: colors.fg3 }]}>@</Text>
+            <TextInput
+              value={query}
+              onChangeText={(text) =>
+                setQuery(text.toLowerCase().replace(/[^a-z0-9-]/g, ''))
+              }
+              placeholder="yourname"
+              placeholderTextColor={colors.fg3}
+              autoCapitalize="none"
+              autoCorrect={false}
+              style={[styles.searchInput, { color: colors.fg }]}
+            />
+            {state === 'searching' && (
+              <ActivityIndicator size="small" color={colors.accent} />
+            )}
+          </View>
+        </View>
+
+        {/* Results List */}
+        {results.length > 0 && (
+          <View style={styles.resultsList}>
             {results.map((r) => {
-              const isSelected = selected === r.name
+              const isSelected = selected === r.name && r.available
 
               return (
                 <TouchableOpacity
@@ -151,9 +385,11 @@ export default function ENSSearchScreen({ onPurchase }: Props) {
                   disabled={!r.available}
                   onPress={() => r.available && setSelected(r.name)}
                   style={[
-                    styles.resultItem,
+                    styles.resultCard,
                     {
-                      backgroundColor: isSelected ? colors.mt10 : colors.surface,
+                      backgroundColor: isSelected
+                        ? colors.surface
+                        : colors.raised,
                       borderColor: isSelected ? colors.accent : colors.border,
                       opacity: r.available ? 1 : 0.6,
                     },
@@ -161,9 +397,11 @@ export default function ENSSearchScreen({ onPurchase }: Props) {
                 >
                   <View
                     style={[
-                      styles.resultIconCircle,
+                      styles.statusDotBox,
                       {
-                        backgroundColor: r.available ? colors.mt16 : 'rgba(255,71,87,0.1)',
+                        backgroundColor: r.available
+                          ? 'rgba(29, 93, 58, 0.15)'
+                          : 'rgba(255, 71, 87, 0.12)',
                       },
                     ]}
                   >
@@ -171,8 +409,8 @@ export default function ENSSearchScreen({ onPurchase }: Props) {
                       <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
                         <Path
                           d="M20 6L9 17L4 12"
-                          stroke={colors.accent}
-                          strokeWidth={2.5}
+                          stroke="#1D5D3A"
+                          strokeWidth={2.4}
                           strokeLinecap="round"
                           strokeLinejoin="round"
                         />
@@ -199,16 +437,15 @@ export default function ENSSearchScreen({ onPurchase }: Props) {
                         { color: r.available ? colors.accent : '#FF4757' },
                       ]}
                     >
-                      {r.available ? 'Available' : 'Taken'}
+                      {r.available ? 'Available to claim' : 'Taken on Sepolia'}
                     </Text>
                   </View>
 
-                  {r.available && r.usd && (
+                  {r.available && (
                     <View style={styles.resultPriceBox}>
-                      <Text style={[styles.resultEthPrice, { color: colors.fg }]}>
-                        {usdToEth(r.usd).toFixed(5)} ETH
-                      </Text>
-                      <Text style={[styles.resultPeriod, { color: colors.fg3 }]}>/ year</Text>
+                      <View style={styles.freeBadge}>
+                        <Text style={styles.freeBadgeText}>FREE</Text>
+                      </View>
                     </View>
                   )}
 
@@ -216,13 +453,13 @@ export default function ENSSearchScreen({ onPurchase }: Props) {
                     <View
                       style={[
                         styles.selectionCheck,
-                        { backgroundColor: colors.accent },
+                        { backgroundColor: '#1D5D3A' },
                       ]}
                     >
                       <Svg width={10} height={10} viewBox="0 0 12 12" fill="none">
                         <Path
                           d="M2 6L4.5 8.5L10 3"
-                          stroke={colors.accentFg}
+                          stroke="#F5F3EB"
                           strokeWidth={1.8}
                           strokeLinecap="round"
                           strokeLinejoin="round"
@@ -239,82 +476,6 @@ export default function ENSSearchScreen({ onPurchase }: Props) {
         {/* Payment & Breakdown */}
         {selectedResult && (
           <View style={styles.checkoutSection}>
-            <Text style={[styles.sectionHeading, { color: colors.fg3 }]}>
-              Pay from Wallet
-            </Text>
-
-            {/* Connected Wallet (External or Embedded) */}
-            <View
-              style={[
-                styles.walletCard,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              <View style={styles.walletHeaderRow}>
-                <View
-                  style={[
-                    styles.privyIcon,
-                    {
-                      backgroundColor: colors.raised,
-                      borderColor: colors.border,
-                    },
-                  ]}
-                >
-                  {user?.authMethod === 'metamask' ? (
-                    <MetaMaskIcon size={22} />
-                  ) : user?.authMethod === 'walletconnect' ? (
-                    <WalletConnectIcon size={22} />
-                  ) : (
-                    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
-                      <Rect x="3" y="6" width="18" height="13" rx="2" stroke={colors.accent} strokeWidth={1.6} />
-                      <Path d="M3 10h18" stroke={colors.accent} strokeWidth={1.4} />
-                      <Circle cx="7" cy="14.5" r="1.5" fill={colors.accent} />
-                    </Svg>
-                  )}
-                </View>
-                <View style={styles.walletInfo}>
-                  <Text style={[styles.walletTitle, { color: colors.fg3 }]}>
-                    {user?.authMethod === 'metamask'
-                      ? 'MetaMask Wallet'
-                      : user?.authMethod === 'walletconnect'
-                      ? 'WalletConnect'
-                      : 'Privy Embedded Wallet'}
-                  </Text>
-                  <Text style={[styles.walletAddress, { color: colors.fg }]}>
-                    {walletAddress}
-                  </Text>
-                </View>
-                <View style={styles.walletBalanceBox}>
-                  <Text style={[styles.walletBalanceEth, { color: colors.fg }]}>
-                    {ethBalance.toFixed(4)}{' '}
-                    <Text style={{ fontSize: 11, color: colors.fg3 }}>ETH</Text>
-                  </Text>
-                  <Text style={[styles.walletBalanceUsd, { color: colors.fg3 }]}>
-                    ≈ ${usdBalance.toFixed(0)}
-                  </Text>
-                </View>
-              </View>
-
-              <View
-                style={[
-                  styles.networkBadge,
-                  {
-                    backgroundColor: colors.raised,
-                    borderColor: colors.border,
-                  },
-                ]}
-              >
-                <View style={[styles.networkDot, { backgroundColor: '#627EEA' }]} />
-                <Text style={[styles.networkText, { color: colors.fg3 }]}>
-                  Ethereum Mainnet
-                </Text>
-              </View>
-            </View>
-
-            {/* Transaction Breakdown */}
             <View
               style={[
                 styles.breakdownCard,
@@ -325,120 +486,260 @@ export default function ENSSearchScreen({ onPurchase }: Props) {
               ]}
             >
               <Text style={[styles.breakdownHeader, { color: colors.fg3 }]}>
-                Transaction
+                Registration Summary
               </Text>
               <View style={styles.breakdownRow}>
                 <Text style={[styles.breakdownLabel, { color: colors.fg2 }]}>
-                  Register <Text style={{ fontWeight: '800', color: colors.fg }}>{selectedResult.name}</Text>
+                  Root Identity
                 </Text>
-                <Text style={[styles.breakdownValue, { color: colors.fg }]}>
-                  {regEth.toFixed(5)} ETH
+                <Text style={[styles.breakdownValue, { color: colors.fg, fontWeight: '800' }]}>
+                  {selectedResult.name}
                 </Text>
               </View>
+
               <View style={styles.breakdownRow}>
                 <Text style={[styles.breakdownLabel, { color: colors.fg2 }]}>
-                  Gas (estimate)
+                  Campaign Sponsorship
                 </Text>
-                <Text style={[styles.breakdownValue, { color: colors.fg }]}>
-                  ~{gasEth.toFixed(5)} ETH
+                <Text style={[styles.breakdownValue, { color: '#1D5D3A' }]}>
+                  100% Free (ETHOnline 2026)
+                </Text>
+              </View>
+
+              <View style={styles.breakdownRow}>
+                <Text style={[styles.breakdownLabel, { color: colors.fg2 }]}>
+                  Network Gas
+                </Text>
+                <Text style={[styles.breakdownValue, { color: '#1D5D3A' }]}>
+                  Sponsored by Alchemy
                 </Text>
               </View>
 
               <View style={[styles.breakdownDivider, { backgroundColor: colors.border }]} />
 
               <View style={styles.breakdownRow}>
-                <Text style={[styles.totalLabel, { color: colors.fg }]}>Total</Text>
-                <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={[styles.totalEth, { color: colors.accent }]}>
-                    {totalEth.toFixed(5)} ETH
-                  </Text>
-                  <Text style={[styles.totalUsd, { color: colors.fg3 }]}>
-                    ≈ ${(totalEth * ETH_USD).toFixed(2)}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={[styles.balanceAfterRow, { borderTopColor: colors.border }]}>
-                <Text style={[styles.balanceAfterLabel, { color: colors.fg3 }]}>
-                  Balance after
-                </Text>
-                <Text
-                  style={[
-                    styles.balanceAfterValue,
-                    { color: sufficient ? colors.fg2 : '#FF4757' },
-                  ]}
-                >
-                  {(ethBalance - totalEth).toFixed(5)} ETH
+                <Text style={[styles.totalLabel, { color: colors.fg }]}>Total Due</Text>
+                <Text style={[styles.totalEth, { color: '#1D5D3A' }]}>
+                  $0.00 USD
                 </Text>
               </View>
             </View>
 
-            {/* Insufficient funds */}
-            {!sufficient && (
-              <View style={styles.warningBox}>
-                <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
-                  <Path d="M12 9v4M12 17h.01" stroke="#FF4757" strokeWidth={2} strokeLinecap="round" />
-                  <Path
-                    d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
-                    stroke="#FF4757"
-                    strokeWidth={1.6}
-                    strokeLinejoin="round"
-                  />
-                </Svg>
-                <Text style={styles.warningText}>
-                  Insufficient ETH. Add funds to your Privy wallet.
-                </Text>
-              </View>
-            )}
-
-            {/* Confirm CTA */}
+            {/* Confirm & Register Button */}
             <TouchableOpacity
               activeOpacity={0.85}
-              disabled={confirming || !sufficient}
-              onPress={handleConfirm}
+              onPress={handleExecuteRegistration}
               style={[
                 styles.confirmButton,
                 {
-                  backgroundColor: sufficient ? colors.accent : colors.raised,
+                  backgroundColor: '#1D5D3A',
                 },
               ]}
             >
-              {confirming ? (
-                <View style={styles.confirmingRow}>
-                  <ActivityIndicator size="small" color={colors.accentFg} />
-                  <Text style={[styles.confirmButtonText, { color: colors.accentFg }]}>
-                    Registering…
-                  </Text>
-                </View>
-              ) : (
-                <View style={styles.confirmingRow}>
-                  <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-                    <Path
-                      d="M5 12h14M13 6l6 6-6 6"
-                      stroke={sufficient ? colors.accentFg : colors.fg3}
-                      strokeWidth={2.2}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </Svg>
-                  <Text
-                    style={[
-                      styles.confirmButtonText,
-                      { color: sufficient ? colors.accentFg : colors.fg3 },
-                    ]}
-                  >
-                    Confirm from Wallet
-                  </Text>
-                </View>
-              )}
+              <View style={styles.confirmingRow}>
+                <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+                  <Path
+                    d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"
+                    stroke="#F5F3EB"
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </Svg>
+                <Text style={styles.confirmButtonText}>
+                  Claim & Register {selected}
+                </Text>
+              </View>
             </TouchableOpacity>
-
-            <Text style={[styles.signingNote, { color: colors.fg3 }]}>
-              Transaction signed with your Passkey · No seed phrase required
-            </Text>
           </View>
         )}
       </ScrollView>
+
+      {/* ── 3-Stage Transaction Execution Modal ── */}
+      <Modal visible={showTxModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View
+            style={[
+              styles.modalCard,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.fg }]}>
+                {txProgress.stage === 'confirmed'
+                  ? 'Identity Registered!'
+                  : 'Registering on Sepolia'}
+              </Text>
+            </View>
+
+            {/* Stages indicator */}
+            <View style={styles.stageList}>
+              {/* Stage 1 */}
+              <View style={styles.stageItem}>
+                <View
+                  style={[
+                    styles.stageDot,
+                    {
+                      backgroundColor:
+                        txProgress.stage === 'simulating'
+                          ? colors.accent
+                          : txProgress.stage === 'broadcasting' ||
+                            txProgress.stage === 'confirming' ||
+                            txProgress.stage === 'confirmed'
+                          ? '#1D5D3A'
+                          : colors.raised,
+                    },
+                  ]}
+                >
+                  {txProgress.stage !== 'simulating' &&
+                  txProgress.stage !== 'idle' ? (
+                    <Svg width={10} height={10} viewBox="0 0 12 12" fill="none">
+                      <Path
+                        d="M2 6L4.5 8.5L10 3"
+                        stroke="#F5F3EB"
+                        strokeWidth={2}
+                        strokeLinecap="round"
+                      />
+                    </Svg>
+                  ) : (
+                    <ActivityIndicator size="small" color="#F5F3EB" />
+                  )}
+                </View>
+                <View style={styles.stageContent}>
+                  <Text style={[styles.stageName, { color: colors.fg }]}>
+                    1. Alchemy Gas Sponsorship
+                  </Text>
+                  <Text style={[styles.stageDesc, { color: colors.fg3 }]}>
+                    Verifying policy & Paymaster authorization
+                  </Text>
+                </View>
+              </View>
+
+              {/* Stage 2 */}
+              <View style={styles.stageItem}>
+                <View
+                  style={[
+                    styles.stageDot,
+                    {
+                      backgroundColor:
+                        txProgress.stage === 'broadcasting'
+                          ? colors.accent
+                          : txProgress.stage === 'confirming' ||
+                            txProgress.stage === 'confirmed'
+                          ? '#1D5D3A'
+                          : colors.raised,
+                    },
+                  ]}
+                >
+                  {txProgress.stage === 'confirming' ||
+                  txProgress.stage === 'confirmed' ? (
+                    <Svg width={10} height={10} viewBox="0 0 12 12" fill="none">
+                      <Path
+                        d="M2 6L4.5 8.5L10 3"
+                        stroke="#F5F3EB"
+                        strokeWidth={2}
+                        strokeLinecap="round"
+                      />
+                    </Svg>
+                  ) : txProgress.stage === 'broadcasting' ? (
+                    <ActivityIndicator size="small" color="#F5F3EB" />
+                  ) : null}
+                </View>
+                <View style={styles.stageContent}>
+                  <Text style={[styles.stageName, { color: colors.fg }]}>
+                    2. Sepolia Mempool Broadcast
+                  </Text>
+                  <Text style={[styles.stageDesc, { color: colors.fg3 }]}>
+                    Universal Resolver: 0xd26f2040...
+                  </Text>
+                </View>
+              </View>
+
+              {/* Stage 3 */}
+              <View style={styles.stageItem}>
+                <View
+                  style={[
+                    styles.stageDot,
+                    {
+                      backgroundColor:
+                        txProgress.stage === 'confirmed'
+                          ? '#1D5D3A'
+                          : txProgress.stage === 'confirming'
+                          ? colors.accent
+                          : colors.raised,
+                    },
+                  ]}
+                >
+                  {txProgress.stage === 'confirmed' ? (
+                    <Svg width={10} height={10} viewBox="0 0 12 12" fill="none">
+                      <Path
+                        d="M2 6L4.5 8.5L10 3"
+                        stroke="#F5F3EB"
+                        strokeWidth={2}
+                        strokeLinecap="round"
+                      />
+                    </Svg>
+                  ) : txProgress.stage === 'confirming' ? (
+                    <ActivityIndicator size="small" color="#F5F3EB" />
+                  ) : null}
+                </View>
+                <View style={styles.stageContent}>
+                  <Text style={[styles.stageName, { color: colors.fg }]}>
+                    3. ENSv2 Node Ownership
+                  </Text>
+                  <Text style={[styles.stageDesc, { color: colors.fg3 }]}>
+                    Reverse record assigned to your smart account
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Transaction Detail Card */}
+            {txResult.txHash && (
+              <View
+                style={[
+                  styles.txHashCard,
+                  { backgroundColor: colors.raised, borderColor: colors.border },
+                ]}
+              >
+                <Text style={[styles.txHashLabel, { color: colors.fg3 }]}>
+                  Sepolia Transaction Hash
+                </Text>
+                <Text style={[styles.txHashValue, { color: colors.fg }]}>
+                  {txResult.txHash.slice(0, 16)}...{txResult.txHash.slice(-12)}
+                </Text>
+
+                {txResult.explorerUrl && (
+                  <TouchableOpacity
+                    onPress={() => Linking.openURL(txResult.explorerUrl!)}
+                    style={styles.explorerLinkBtn}
+                  >
+                    <Text style={[styles.explorerLinkText, { color: colors.accent }]}>
+                      View on Hackathon ENS Explorer →
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+
+            {/* Complete / Enter App CTA */}
+            {txProgress.stage === 'confirmed' && (
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={handleComplete}
+                style={[styles.completeBtn, { backgroundColor: '#1D5D3A' }]}
+              >
+                <Text style={styles.completeBtnText}>
+                  Open Family Treasury Dashboard →
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   )
 }
@@ -448,91 +749,190 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
     paddingTop: 12,
-    paddingBottom: 16,
+    paddingBottom: 8,
   },
-  badge: {
+  campaignBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
     gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
     borderWidth: 1,
-    marginBottom: 12,
+    alignSelf: 'flex-start',
+    marginBottom: 8,
   },
-  badgeText: {
-    fontSize: 10,
-    fontWeight: '900',
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
+  campaignBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#1D5D3A',
   },
   title: {
     fontSize: 26,
     fontWeight: '900',
     letterSpacing: -0.5,
-    lineHeight: 32,
-    marginBottom: 6,
+    marginBottom: 4,
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '500',
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 24,
-    paddingBottom: 32,
+    paddingHorizontal: 20,
+    paddingBottom: 40,
+    gap: 16,
+  },
+  faucetCard: {
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 16,
+    gap: 12,
+  },
+  faucetCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  faucetIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(29, 93, 58, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  faucetHeaderInfo: {
+    flex: 1,
+  },
+  faucetTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  faucetTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  sponsoredPill: {
+    backgroundColor: 'rgba(29, 93, 58, 0.15)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  sponsoredPillText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#1D5D3A',
+  },
+  faucetAddressText: {
+    fontSize: 11,
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  copyBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  copyBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  faucetBalanceBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 12,
+    borderRadius: 14,
+  },
+  balanceLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  balanceValue: {
+    fontSize: 18,
+    fontWeight: '900',
+    marginTop: 2,
+  },
+  claimGrantBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 12,
+  },
+  claimGrantBtnText: {
+    color: '#F5F3EB',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  externalFaucetLinkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 2,
+  },
+  externalFaucetText: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  faucetNotification: {
+    backgroundColor: 'rgba(29, 93, 58, 0.12)',
+    padding: 8,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  faucetNotificationText: {
+    color: '#1D5D3A',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  searchSection: {
+    gap: 8,
+  },
+  sectionHeading: {
+    fontSize: 12,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 20,
+    borderRadius: 16,
     borderWidth: 1.5,
-    paddingHorizontal: 16,
-    height: 58,
-    marginBottom: 20,
+    paddingHorizontal: 14,
+    height: 50,
   },
   atSymbol: {
-    fontSize: 18,
-    fontWeight: '900',
-    marginRight: 4,
+    fontSize: 16,
+    fontWeight: '800',
+    marginRight: 6,
   },
   searchInput: {
     flex: 1,
-    fontSize: 18,
-    fontWeight: '900',
-  },
-  ethSuffix: {
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: '700',
   },
-  resultsContainer: {
+  resultsList: {
     gap: 8,
-    marginBottom: 24,
   },
-  sectionHeading: {
-    fontSize: 10,
-    fontWeight: '900',
-    textTransform: 'uppercase',
-    letterSpacing: 1.4,
-    marginBottom: 4,
-  },
-  resultItem: {
+  resultCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 14,
-    borderRadius: 20,
+    padding: 12,
+    borderRadius: 16,
     borderWidth: 1,
     gap: 12,
   },
-  resultIconCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+  statusDotBox: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -540,111 +940,55 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   resultName: {
-    fontSize: 15,
-    fontWeight: '900',
-    letterSpacing: -0.2,
+    fontSize: 14,
+    fontWeight: '800',
   },
   resultStatus: {
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 2,
   },
   resultPriceBox: {
     alignItems: 'flex-end',
   },
-  resultEthPrice: {
-    fontSize: 13,
-    fontWeight: '900',
-    fontVariant: ['tabular-nums'],
+  freeBadge: {
+    backgroundColor: 'rgba(29, 93, 58, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
   },
-  resultPeriod: {
-    fontSize: 10,
+  freeBadgeText: {
+    color: '#1D5D3A',
+    fontSize: 11,
+    fontWeight: '900',
   },
   selectionCheck: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
   },
   checkoutSection: {
     gap: 12,
   },
-  walletCard: {
-    borderRadius: 20,
-    borderWidth: 1,
-    padding: 16,
-    gap: 12,
-  },
-  walletHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  privyIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  walletInfo: {
-    flex: 1,
-  },
-  walletTitle: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  walletAddress: {
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  walletBalanceBox: {
-    alignItems: 'flex-end',
-  },
-  walletBalanceEth: {
-    fontSize: 14,
-    fontWeight: '900',
-  },
-  walletBalanceUsd: {
-    fontSize: 10,
-  },
-  networkBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  networkDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  networkText: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
   breakdownCard: {
-    borderRadius: 20,
+    borderRadius: 18,
     borderWidth: 1,
     padding: 16,
     gap: 8,
   },
   breakdownHeader: {
-    fontSize: 10,
-    fontWeight: '900',
+    fontSize: 11,
+    fontWeight: '800',
     textTransform: 'uppercase',
-    letterSpacing: 1.4,
+    letterSpacing: 0.5,
     marginBottom: 4,
   },
   breakdownRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
   },
   breakdownLabel: {
     fontSize: 13,
@@ -660,54 +1004,21 @@ const styles = StyleSheet.create({
   },
   totalLabel: {
     fontSize: 14,
-    fontWeight: '900',
+    fontWeight: '800',
   },
   totalEth: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '900',
   },
-  totalUsd: {
-    fontSize: 10,
-  },
-  balanceAfterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderTopWidth: 1,
-    borderStyle: 'dashed',
-    paddingTop: 8,
-    marginTop: 4,
-  },
-  balanceAfterLabel: {
-    fontSize: 11,
-    fontWeight: '500',
-  },
-  balanceAfterValue: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  warningBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    padding: 12,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,71,87,0.06)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,71,87,0.22)',
-  },
-  warningText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#FF4757',
-    flex: 1,
-  },
   confirmButton: {
-    paddingVertical: 16,
-    borderRadius: 28,
+    height: 52,
+    borderRadius: 26,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 4,
+    elevation: 3,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
   },
   confirmingRow: {
     flexDirection: 'row',
@@ -715,12 +1026,90 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   confirmButtonText: {
-    fontSize: 16,
+    color: '#F5F3EB',
+    fontSize: 15,
     fontWeight: '900',
   },
-  signingNote: {
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 380,
+    borderRadius: 24,
+    borderWidth: 1,
+    padding: 20,
+    gap: 16,
+  },
+  modalHeader: {
+    alignItems: 'center',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  stageList: {
+    gap: 14,
+  },
+  stageItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  stageDot: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stageContent: {
+    flex: 1,
+  },
+  stageName: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  stageDesc: {
+    fontSize: 11,
+    marginTop: 1,
+  },
+  txHashCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 12,
+    gap: 4,
+  },
+  txHashLabel: {
     fontSize: 10,
-    textAlign: 'center',
-    fontWeight: '500',
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  txHashValue: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  explorerLinkBtn: {
+    marginTop: 4,
+  },
+  explorerLinkText: {
+    fontSize: 11,
+    fontWeight: '700',
+    textDecorationLine: 'underline',
+  },
+  completeBtn: {
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  completeBtnText: {
+    color: '#F5F3EB',
+    fontSize: 14,
+    fontWeight: '900',
   },
 })

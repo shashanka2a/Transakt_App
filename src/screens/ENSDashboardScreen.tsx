@@ -214,11 +214,11 @@ export default function ENSDashboardScreen({ onEnterApp }: Props) {
             <View
               style={[
                 styles.ensv2Tag,
-                { backgroundColor: colors.mt10 },
+                { backgroundColor: 'rgba(29, 93, 58, 0.18)', borderColor: '#1D5D3A' },
               ]}
             >
               <Text style={[styles.ensv2TagText, { color: colors.accent }]}>
-                ENSv2
+                ENSv2 Sepolia Beta
               </Text>
             </View>
           </View>

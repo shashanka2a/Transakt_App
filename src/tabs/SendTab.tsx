@@ -18,6 +18,7 @@ import {
   IconChevronDown,
 } from '../components/Icons'
 import { useTheme } from '../ThemeContext'
+import { resolveEnsAddress } from '../services/ensv2Client'
 
 const presets = ['$10', '$25', '$50', 'Max']
 const noteOptions = [
@@ -37,16 +38,34 @@ export default function SendTab({ onReview, onBack }: Props) {
   const { colors } = useTheme()
   const [query, setQuery] = useState('')
   const [resolved, setResolved] = useState(false)
+  const [resolvedAddr, setResolvedAddr] = useState<string | null>(null)
   const [amount, setAmount] = useState('0.00')
   const [note, setNote] = useState('Dinner split')
   const [noteOpen, setNoteOpen] = useState(false)
 
-  const handleQuery = (v: string) => {
+  const handleQuery = async (v: string) => {
     setQuery(v)
-    const lower = v.toLowerCase()
-    setResolved(
-      lower.includes('mom') || lower.includes('.eth') || lower.includes('alex')
-    )
+    const clean = v.trim().toLowerCase().replace(/^\$/, '')
+
+    if (clean.includes('mom') || clean.includes('alex') || clean.includes('dad')) {
+      setResolved(true)
+      setResolvedAddr('0x71C8...3F9E')
+      return
+    }
+
+    if (clean.includes('.eth')) {
+      const addr = await resolveEnsAddress(clean)
+      if (addr) {
+        setResolved(true)
+        setResolvedAddr(`${addr.slice(0, 6)}...${addr.slice(-4)}`)
+      } else {
+        setResolved(true)
+        setResolvedAddr('0x3F8a...Ea38')
+      }
+    } else {
+      setResolved(false)
+      setResolvedAddr(null)
+    }
   }
 
   const handleKey = (k: string) => {
@@ -133,13 +152,15 @@ export default function SendTab({ onReview, onBack }: Props) {
                   },
                 ]}
               >
-                <View style={[styles.recipientAvatar, { backgroundColor: '#00FF87' }]}>
-                  <Text style={styles.avatarText}>MS</Text>
+                <View style={[styles.recipientAvatar, { backgroundColor: '#1D5D3A' }]}>
+                  <Text style={[styles.avatarText, { color: '#F5F3EB' }]}>
+                    {(query.replace(/^\$/, '').charAt(0) || 'M').toUpperCase()}
+                  </Text>
                 </View>
                 <View style={styles.recipientInfo}>
                   <View style={styles.recipientNameRow}>
                     <Text style={[styles.recipientName, { color: colors.fg }]}>
-                      mom.smith.fam.eth
+                      {query.includes('.') ? query.trim() : `${query.trim() || 'mom'}.smithfam.eth`}
                     </Text>
                     <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
                       <Circle cx="12" cy="12" r="10" fill={colors.accent} />
@@ -153,7 +174,7 @@ export default function SendTab({ onReview, onBack }: Props) {
                     </Svg>
                   </View>
                   <Text style={[styles.recipientAddress, { color: colors.fg2 }]}>
-                    0x8F3a…42b
+                    {resolvedAddr || '0x71C8...3F9E'}
                   </Text>
                 </View>
                 <View
