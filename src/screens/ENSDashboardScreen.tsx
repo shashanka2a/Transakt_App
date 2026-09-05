@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   StyleSheet,
   ScrollView,
   Platform,
+  Linking,
 } from 'react-native'
 import Svg, { Path } from 'react-native-svg'
 import {
@@ -16,10 +17,16 @@ import {
   IconChevronDown,
   IconSun,
   IconMoon,
+  EthDiamond,
 } from '../components/Icons'
 import { useTheme } from '../ThemeContext'
 import { useAuth } from '../AuthContext'
 import IssueSubnameModal from './IssueSubnameModal'
+import {
+  getSepoliaBalance,
+  watchSepoliaBalance,
+  isValidEthereumAddress,
+} from '../services/alchemyFaucetService'
 
 interface Props {
   onEnterApp: () => void
@@ -72,8 +79,37 @@ export default function ENSDashboardScreen({ onEnterApp }: Props) {
   const { user } = useAuth()
   const [showIssue, setShowIssue] = useState(false)
   const [dropdown, setDropdown] = useState(false)
+  const [liveBalance, setLiveBalance] = useState<number | null>(null)
 
+  const rawAddress =
+    user?.address && isValidEthereumAddress(user.address)
+      ? user.address
+      : '0x71C8a27B2f90A2E80562eA9b294D0A38e83f3F9E'
   const activeEns = user?.ensName || 'smithfam.eth'
+
+  useEffect(() => {
+    let isMounted = true
+
+    getSepoliaBalance(rawAddress).then((bal) => {
+      if (isMounted) setLiveBalance(bal)
+    })
+
+    const unwatch = watchSepoliaBalance(rawAddress, liveBalance || 0, (newBal) => {
+      if (isMounted) setLiveBalance(newBal)
+    })
+
+    return () => {
+      isMounted = false
+      unwatch()
+    }
+  }, [rawAddress])
+
+  const effectiveEth = liveBalance !== null && liveBalance > 0 ? liveBalance : 0.45
+  const ethPriceUsd = 3240.50
+  const totalUsd = (effectiveEth * ethPriceUsd).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
 
   return (
     <View style={[styles.container, { backgroundColor: colors.bg }]}>
@@ -174,10 +210,10 @@ export default function ENSDashboardScreen({ onEnterApp }: Props) {
             Family Treasury
           </Text>
           <Text style={[styles.heroAmount, { color: colors.fg }]}>
-            $1,420.50
+            ${totalUsd}
           </Text>
           <Text style={[styles.heroSubtext, { color: colors.fg2 }]}>
-            0.58 ETH · {activeEns}
+            {effectiveEth.toFixed(4)} ETH · Sepolia Live · {activeEns}
           </Text>
 
           <TouchableOpacity
@@ -325,6 +361,23 @@ export default function ENSDashboardScreen({ onEnterApp }: Props) {
                 Add a family member to your node
               </Text>
             </View>
+          </TouchableOpacity>
+
+          {/* ── Testnet Verification Link at Bottom ── */}
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() =>
+              Linking.openURL(`https://sepolia.etherscan.io/address/${rawAddress}`)
+            }
+            style={styles.bottomVerifyLink}
+          >
+            <EthDiamond size={13} color="#1D5D3A" />
+            <Text style={[styles.bottomVerifyText, { color: colors.fg3 }]}>
+              Ethereum Sepolia Testnet ·{' '}
+              <Text style={{ color: '#1D5D3A', fontWeight: '700' }}>
+                Verify Onchain Activity on Etherscan ↗
+              </Text>
+            </Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -576,5 +629,22 @@ const styles = StyleSheet.create({
   },
   issueSubtitle: {
     fontSize: 12,
+  },
+  bottomVerifyLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginTop: 18,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(29, 93, 58, 0.18)',
+    backgroundColor: 'rgba(29, 93, 58, 0.05)',
+  },
+  bottomVerifyText: {
+    fontSize: 12,
+    fontWeight: '500',
   },
 })

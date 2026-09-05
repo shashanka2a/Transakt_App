@@ -196,7 +196,7 @@ export async function executeEnsRegistration(
     // Stage 1: Simulation & Paymaster verification
     onProgress?.({
       stage: 'simulating',
-      detail: 'Verifying Alchemy Gas Manager policy & simulating UserOperation...',
+      detail: 'Verifying Gas Manager sponsorship policy & simulating UserOperation...',
     })
     await new Promise((resolve) => setTimeout(resolve, 1100))
 

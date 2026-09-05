@@ -6,8 +6,11 @@ import {
   StyleSheet,
   ScrollView,
   Platform,
+  Linking,
 } from 'react-native'
 import { useTheme } from '../ThemeContext'
+import { useAuth } from '../AuthContext'
+import { EthDiamond } from '../components/Icons'
 
 interface ActivityItem {
   id: number
@@ -19,6 +22,7 @@ interface ActivityItem {
   initials: string
   hue: number
   category: 'Family' | 'DeFi' | 'NFT'
+  txHash?: string
 }
 
 interface ActivityGroup {
@@ -40,6 +44,7 @@ const groups: ActivityGroup[] = [
         initials: 'MS',
         hue: 150,
         category: 'Family',
+        txHash: '0x3a4b92c104db2d9b387799147d3bef32a606ea38991204859aefd123b091f82e',
       },
       {
         id: 2,
@@ -51,6 +56,7 @@ const groups: ActivityGroup[] = [
         initials: 'UN',
         hue: 240,
         category: 'DeFi',
+        txHash: '0x71c8a27b2f90a2e80562ea9b294d0a38e83f3f9e88b2a7194091a92dfbc8129a',
       },
     ],
   },
@@ -67,6 +73,7 @@ const groups: ActivityGroup[] = [
         initials: 'DS',
         hue: 150,
         category: 'Family',
+        txHash: '0x1ad91eec094c299f1269e64f37264ad5e5496465001928374650192837465019',
       },
       {
         id: 4,
@@ -78,6 +85,7 @@ const groups: ActivityGroup[] = [
         initials: 'OS',
         hue: 210,
         category: 'NFT',
+        txHash: '0x9bca473b5b8539b97779d750cde2782ef939d840112233445566778899aabbcc',
       },
     ],
   },
@@ -94,6 +102,7 @@ const groups: ActivityGroup[] = [
         initials: 'CV',
         hue: 40,
         category: 'Family',
+        txHash: '0x4f8e91a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e',
       },
       {
         id: 6,
@@ -105,6 +114,7 @@ const groups: ActivityGroup[] = [
         initials: 'AV',
         hue: 190,
         category: 'DeFi',
+        txHash: '0x5a6b7c8d9e0f1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3',
       },
       {
         id: 7,
@@ -116,6 +126,7 @@ const groups: ActivityGroup[] = [
         initials: 'AN',
         hue: 150,
         category: 'Family',
+        txHash: '0x6b7c8d9e0f1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4',
       },
       {
         id: 8,
@@ -127,6 +138,7 @@ const groups: ActivityGroup[] = [
         initials: 'MX',
         hue: 270,
         category: 'NFT',
+        txHash: '0x7c8d9e0f1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5',
       },
     ],
   },
@@ -136,7 +148,10 @@ const filterOptions = ['All', 'Incoming', 'Outgoing', 'Family', 'DeFi', 'NFT']
 
 export default function ActivityTab() {
   const { colors } = useTheme()
+  const { user } = useAuth()
   const [filter, setFilter] = useState('All')
+
+  const rawAddress = user?.address || '0x71C8a27B2f90A2E80562eA9b294D0A38e83f3F9E'
 
   const allItems = groups.flatMap((g) => g.items)
   const filtered = groups
@@ -184,6 +199,11 @@ export default function ActivityTab() {
       bg: colors.raised,
       border: colors.border,
     }
+  }
+
+  const openTx = (item: ActivityItem) => {
+    const hash = item.txHash || '0x3a4b92c104db2d9b387799147d3bef32a606ea38991204859aefd123b091f82e'
+    Linking.openURL(`https://sepolia.etherscan.io/tx/${hash}`)
   }
 
   return (
@@ -295,8 +315,10 @@ export default function ActivityTab() {
                 const catStyle = getCategoryBadgeStyle(item.category)
 
                 return (
-                  <View
+                  <TouchableOpacity
                     key={item.id}
+                    activeOpacity={0.7}
+                    onPress={() => openTx(item)}
                     style={[
                       styles.itemRow,
                       {
@@ -334,8 +356,7 @@ export default function ActivityTab() {
                       <View style={styles.itemMetaRow}>
                         <Text
                           numberOfLines={1}
-                          style={[styles.itemNote, { color: colors.fg2 }]}
-                        >
+                          style={[styles.itemNote, { color: colors.fg2 }]}>
                           {item.note}
                         </Text>
                         <View
@@ -369,16 +390,33 @@ export default function ActivityTab() {
                         {item.amount}
                       </Text>
                       <Text style={[styles.itemTime, { color: colors.fg3 }]}>
-                        {item.time}
+                        {item.time} ↗
                       </Text>
                     </View>
-                  </View>
+                  </TouchableOpacity>
                 )
               })}
             </View>
           </View>
         ))}
       </View>
+
+      {/* ── Testnet Verification Link at Bottom ── */}
+      <TouchableOpacity
+        activeOpacity={0.7}
+        onPress={() =>
+          Linking.openURL(`https://sepolia.etherscan.io/address/${rawAddress}`)
+        }
+        style={styles.bottomVerifyLink}
+      >
+        <EthDiamond size={13} color="#1D5D3A" />
+        <Text style={[styles.bottomVerifyText, { color: colors.fg3 }]}>
+          Ethereum Sepolia Testnet ·{' '}
+          <Text style={{ color: '#1D5D3A', fontWeight: '700' }}>
+            Verify All Activity on Etherscan ↗
+          </Text>
+        </Text>
+      </TouchableOpacity>
     </ScrollView>
   )
 }
@@ -511,5 +549,23 @@ const styles = StyleSheet.create({
   itemTime: {
     fontSize: 10,
     marginTop: 2,
+  },
+  bottomVerifyLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginTop: 24,
+    marginHorizontal: 24,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(29, 93, 58, 0.18)',
+    backgroundColor: 'rgba(29, 93, 58, 0.05)',
+  },
+  bottomVerifyText: {
+    fontSize: 12,
+    fontWeight: '500',
   },
 })

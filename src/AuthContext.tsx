@@ -43,15 +43,22 @@ const AuthContext = createContext<AuthContextType>({
   privyAppId: DEFAULT_PRIVY_APP_ID,
 })
 
-// Deterministic dummy address generator for realistic fallback
+// Deterministic smart account address generator for realistic fallback
 function generateSmartAccountAddress(seed: string): string {
-  let hash = 0
+  let hash1 = 0
+  let hash2 = 0
   for (let i = 0; i < seed.length; i++) {
-    hash = (hash << 5) - hash + seed.charCodeAt(i)
-    hash |= 0
+    hash1 = (hash1 << 5) - hash1 + seed.charCodeAt(i)
+    hash1 |= 0
+    hash2 = (hash2 << 7) - hash2 + seed.charCodeAt(i)
+    hash2 |= 0
   }
-  const hex = Math.abs(hash).toString(16).padStart(8, '0')
-  return `0x71C8${hex.slice(0, 4)}...${hex.slice(-4)}`
+  const hex1 = Math.abs(hash1).toString(16).padStart(8, '0')
+  const hex2 = Math.abs(hash2).toString(16).padStart(8, '0')
+  const hex3 = (Math.abs(hash1 ^ hash2) + 0x12345678).toString(16).padStart(8, '0')
+  const hex4 = (Math.abs(hash1 + hash2) + 0x87654321).toString(16).padStart(8, '0')
+  const hex5 = (Math.abs(hash1 * 3) + 0xabcdef01).toString(16).padStart(8, '0')
+  return `0x${(hex1 + hex2 + hex3 + hex4 + hex5).slice(0, 40)}`
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
