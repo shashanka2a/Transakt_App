@@ -6,6 +6,7 @@ import {
 } from 'react-native'
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
 import { ThemeProvider, useTheme } from './ThemeContext'
+import { AuthProvider, useAuth } from './AuthContext'
 import LoadingScreen from './screens/LoadingScreen'
 import WelcomeScreen from './screens/WelcomeScreen'
 import ENSSearchScreen from './screens/ENSSearchScreen'
@@ -26,7 +27,9 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <ThemeProvider>
-        <AppShell />
+        <AuthProvider>
+          <AppShell />
+        </AuthProvider>
       </ThemeProvider>
     </SafeAreaProvider>
   )
