@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { View, Text, StyleSheet, Animated, Easing } from 'react-native'
-import Svg, { Rect, Line, Path } from 'react-native-svg'
+import Svg, { Rect, Path } from 'react-native-svg'
 
 interface Props {
   onDone: () => void
@@ -97,65 +97,43 @@ export default function LoadingScreen({ onDone }: Props) {
 
 export function TransaktMark({
   size = 64,
-  color = '#00FF87',
+  bgColor = '#1D5D3A',
+  strokeColor = '#F5F3EB',
 }: {
   size?: number
   color?: string
+  bgColor?: string
+  strokeColor?: string
 }) {
   const s = size
 
   return (
-    <Svg width={s} height={s} viewBox="0 0 64 64" fill="none">
-      {/* Rounded-square container */}
-      <Rect
-        x="2"
-        y="2"
-        width="60"
-        height="60"
-        rx="16"
-        stroke={color}
-        strokeWidth="1.8"
-        fill="none"
-      />
-      {/* T crossbar (horizontal line) */}
-      <Line
-        x1="14"
-        y1="22"
-        x2="42"
-        y2="22"
-        stroke={color}
-        strokeWidth="4"
-        strokeLinecap="round"
-      />
-      {/* T stem (vertical) */}
-      <Line
-        x1="28"
-        y1="22"
-        x2="28"
-        y2="46"
-        stroke={color}
-        strokeWidth="4"
-        strokeLinecap="round"
-      />
-      {/* Arrow shaft extending crossbar right */}
-      <Line
-        x1="42"
-        y1="22"
-        x2="50"
-        y2="22"
-        stroke={color}
-        strokeWidth="4"
-        strokeLinecap="round"
-      />
-      {/* Arrowhead */}
-      <Path
-        d="M45 16.5L51 22L45 27.5"
-        stroke={color}
-        strokeWidth="3.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </Svg>
+    <View
+      style={{
+        width: s,
+        height: s,
+        shadowColor: bgColor,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.35,
+        shadowRadius: 10,
+        elevation: 6,
+      }}
+    >
+      <Svg width={s} height={s} viewBox="0 0 100 100" fill="none">
+        {/* Background */}
+        <Rect width="100" height="100" rx="26" fill={bgColor} />
+
+        {/* Icon Path: T + forward transaction arrow */}
+        <Path
+          d="M33 39 L65 39 M45 39 L45 63 M55 29 L65 39 L55 49"
+          fill="none"
+          stroke={strokeColor}
+          strokeWidth="6.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </Svg>
+    </View>
   )
 }
 

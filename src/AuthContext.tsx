@@ -181,13 +181,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setError(null)
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1100))
-      const externalAddress = '0x1aD91eeC094c299F1269E64F37264aD5E5496465'
+      let externalAddress: string | null = null
 
+      // A. Check for injected Web3 provider in browser (MetaMask / injected EIP-1193)
+      if (typeof window !== 'undefined' && (window as any).ethereum) {
+        const eth = (window as any).ethereum
+        // Support multi-provider setups (e.g. MetaMask alongside Coinbase Wallet)
+        const provider =
+          eth.providers?.find((p: any) => p.isMetaMask) ||
+          (eth.isMetaMask ? eth : eth)
+
+        if (type === 'metamask') {
+          try {
+            const accounts = await provider.request({
+              method: 'eth_requestAccounts',
+            })
+            if (accounts && accounts.length > 0) {
+              externalAddress = accounts[0]
+            }
+          } catch (ethErr: any) {
+            if (ethErr?.code === 4001 || ethErr?.message?.includes('User rejected')) {
+              throw new Error('Connection request was rejected in MetaMask.')
+            }
+            console.warn('Injected Web3 request accounts notice:', ethErr)
+          }
+        }
+      }
+
+      // B. Mobile or fallback pairing simulation if no injected provider
+      if (!externalAddress) {
+        await new Promise((resolve) => setTimeout(resolve, 900))
+        if (type === 'metamask') {
+          externalAddress = '0x1aD91eeC094c299F1269E64F37264aD5E5496465'
+        } else {
+          externalAddress = '0x9Bca473B5B8539b97779d750cDE2782eF939D840'
+        }
+      }
+
+      const shortAddr = `${externalAddress.slice(0, 6)}...${externalAddress.slice(-4)}`
       const session: UserSession = {
-        id: `usr_${Date.now()}`,
+        id: `usr_${type}_${Date.now()}`,
         address: externalAddress,
-        ensName: 'alex.smithfam.eth',
+        ensName: `${type === 'metamask' ? 'alex' : 'parent'}.smithfam.eth`,
         authMethod: type,
         createdAt: new Date().toISOString(),
         isEmbeddedWallet: false,

@@ -10,6 +10,7 @@ import {
 } from 'react-native'
 import { Tab } from '../App'
 import { useTheme } from '../ThemeContext'
+import { useAuth } from '../AuthContext'
 import {
   IconSend,
   IconRequest,
@@ -132,6 +133,9 @@ export default function HomeTab({
   onOpenSwap,
 }: Props) {
   const { theme, colors, toggle } = useTheme()
+  const { user } = useAuth()
+
+  const activeEns = user?.ensName || 'smithfam.eth'
 
   return (
     <ScrollView
@@ -152,7 +156,7 @@ export default function HomeTab({
         >
           <View style={[styles.familyDot, { backgroundColor: colors.accent }]} />
           <Text style={[styles.familyPillText, { color: colors.fg }]}>
-            smithfam.eth
+            {activeEns}
           </Text>
         </View>
 

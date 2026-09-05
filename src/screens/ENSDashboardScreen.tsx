@@ -18,6 +18,7 @@ import {
   IconMoon,
 } from '../components/Icons'
 import { useTheme } from '../ThemeContext'
+import { useAuth } from '../AuthContext'
 import IssueSubnameModal from './IssueSubnameModal'
 
 interface Props {
@@ -68,8 +69,11 @@ const subnodes = [
 
 export default function ENSDashboardScreen({ onEnterApp }: Props) {
   const { theme, colors, toggle } = useTheme()
+  const { user } = useAuth()
   const [showIssue, setShowIssue] = useState(false)
   const [dropdown, setDropdown] = useState(false)
+
+  const activeEns = user?.ensName || 'smithfam.eth'
 
   return (
     <View style={[styles.container, { backgroundColor: colors.bg }]}>
@@ -83,7 +87,9 @@ export default function ENSDashboardScreen({ onEnterApp }: Props) {
           <View style={styles.navLeft}>
             <View style={styles.avatarWrapper}>
               <View style={[styles.avatarCircle, { backgroundColor: '#00FF87' }]}>
-                <Text style={styles.avatarLetter}>S</Text>
+                <Text style={styles.avatarLetter}>
+                  {activeEns.charAt(0).toUpperCase()}
+                </Text>
               </View>
               <View
                 style={[
@@ -115,7 +121,7 @@ export default function ENSDashboardScreen({ onEnterApp }: Props) {
               ]}
             >
               <Text style={[styles.accountButtonText, { color: colors.fg }]}>
-                $smithfam.eth
+                ${activeEns}
               </Text>
               <View style={{ transform: [{ rotate: dropdown ? '180deg' : '0deg' }] }}>
                 <IconChevronDown color={colors.fg3} />
@@ -171,7 +177,7 @@ export default function ENSDashboardScreen({ onEnterApp }: Props) {
             $1,420.50
           </Text>
           <Text style={[styles.heroSubtext, { color: colors.fg2 }]}>
-            0.58 ETH · smithfam.eth
+            0.58 ETH · {activeEns}
           </Text>
 
           <TouchableOpacity

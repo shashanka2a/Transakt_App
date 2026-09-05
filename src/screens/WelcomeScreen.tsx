@@ -38,6 +38,8 @@ export default function WelcomeScreen({ onContinue }: Props) {
   const [otpCode, setOtpCode] = useState('')
   const [localError, setLocalError] = useState<string | null>(null)
   const [showWalletModal, setShowWalletModal] = useState(false)
+  const [connectingWallet, setConnectingWallet] = useState<'metamask' | 'walletconnect' | null>(null)
+  const [walletError, setWalletError] = useState<string | null>(null)
 
   // 1. Handle Email Submit
   const handleSendEmail = async () => {
@@ -71,10 +73,15 @@ export default function WelcomeScreen({ onContinue }: Props) {
 
   // 3. Handle External Wallet
   const handleConnectWallet = async (type: 'metamask' | 'walletconnect') => {
-    setShowWalletModal(false)
+    setConnectingWallet(type)
+    setWalletError(null)
     const success = await connectExternalWallet(type)
+    setConnectingWallet(null)
     if (success) {
+      setShowWalletModal(false)
       onContinue()
+    } else {
+      setWalletError(error || `Failed to connect with ${type}. Please try again.`)
     }
   }
 
@@ -381,7 +388,9 @@ export default function WelcomeScreen({ onContinue }: Props) {
         visible={showWalletModal}
         transparent
         animationType="fade"
-        onRequestClose={() => setShowWalletModal(false)}
+        onRequestClose={() => {
+          if (!connectingWallet) setShowWalletModal(false)
+        }}
       >
         <View style={styles.modalOverlay}>
           <View
@@ -395,10 +404,13 @@ export default function WelcomeScreen({ onContinue }: Props) {
           >
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: colors.fg }]}>
-                Connect Wallet
+                Connect External Wallet
               </Text>
               <TouchableOpacity
-                onPress={() => setShowWalletModal(false)}
+                onPress={() => {
+                  if (!connectingWallet) setShowWalletModal(false)
+                }}
+                disabled={!!connectingWallet}
                 style={[styles.closeModalBtn, { backgroundColor: colors.raised }]}
               >
                 <IconX size={14} color={colors.fg2} />
@@ -406,52 +418,104 @@ export default function WelcomeScreen({ onContinue }: Props) {
             </View>
 
             <Text style={[styles.modalSubtitle, { color: colors.fg3 }]}>
-              Link an existing Ethereum wallet to manage your Family Treasury.
+              Link an existing Web3 wallet to manage your Family Treasury.
             </Text>
 
+            {walletError && (
+              <View
+                style={[
+                  styles.errorBox,
+                  {
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    borderColor: 'rgba(239, 68, 68, 0.3)',
+                    marginVertical: 4,
+                  },
+                ]}
+              >
+                <Text style={styles.errorText}>{walletError}</Text>
+              </View>
+            )}
+
             <View style={styles.walletList}>
+              {/* MetaMask Option */}
               <TouchableOpacity
                 activeOpacity={0.8}
                 onPress={() => handleConnectWallet('metamask')}
+                disabled={!!connectingWallet}
                 style={[
                   styles.walletOption,
                   {
                     backgroundColor: colors.raised,
-                    borderColor: colors.border,
+                    borderColor:
+                      connectingWallet === 'metamask'
+                        ? colors.accent
+                        : colors.border,
                   },
                 ]}
               >
-                <MetaMaskIcon size={26} />
+                <MetaMaskIcon size={28} />
                 <View style={styles.walletOptionInfo}>
-                  <Text style={[styles.walletOptionName, { color: colors.fg }]}>
-                    MetaMask
-                  </Text>
+                  <View style={styles.walletTitleRow}>
+                    <Text style={[styles.walletOptionName, { color: colors.fg }]}>
+                      MetaMask
+                    </Text>
+                    {typeof window !== 'undefined' && (window as any).ethereum && (
+                      <View
+                        style={[
+                          styles.detectedBadge,
+                          {
+                            backgroundColor: 'rgba(29, 181, 99, 0.15)',
+                            borderColor: 'rgba(29, 181, 99, 0.3)',
+                          },
+                        ]}
+                      >
+                        <Text style={[styles.detectedBadgeText, { color: '#1DB563' }]}>
+                          Detected
+                        </Text>
+                      </View>
+                    )}
+                  </View>
                   <Text style={[styles.walletOptionDesc, { color: colors.fg3 }]}>
-                    Connect with browser or mobile extension
+                    {connectingWallet === 'metamask'
+                      ? 'Connecting & requesting accounts...'
+                      : 'Connect with browser extension or mobile'}
                   </Text>
                 </View>
+                {connectingWallet === 'metamask' && (
+                  <ActivityIndicator size="small" color={colors.accent} />
+                )}
               </TouchableOpacity>
 
+              {/* WalletConnect Option */}
               <TouchableOpacity
                 activeOpacity={0.8}
                 onPress={() => handleConnectWallet('walletconnect')}
+                disabled={!!connectingWallet}
                 style={[
                   styles.walletOption,
                   {
                     backgroundColor: colors.raised,
-                    borderColor: colors.border,
+                    borderColor:
+                      connectingWallet === 'walletconnect'
+                        ? colors.accent
+                        : colors.border,
                   },
                 ]}
               >
-                <WalletConnectIcon size={26} />
+                <WalletConnectIcon size={28} />
                 <View style={styles.walletOptionInfo}>
                   <Text style={[styles.walletOptionName, { color: colors.fg }]}>
                     WalletConnect
                   </Text>
                   <Text style={[styles.walletOptionDesc, { color: colors.fg3 }]}>
-                    Scan QR with Rainbow, Trust, or Phantom
+                    {connectingWallet === 'walletconnect'
+                      ? 'Pairing with WalletConnect session...'
+                      : 'Scan QR with Rainbow, Trust, or Phantom'}
                   </Text>
                 </View>
+                {connectingWallet === 'walletconnect' && (
+                  <ActivityIndicator size="small" color={colors.accent} />
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -722,6 +786,22 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
     marginBottom: 2,
+  },
+  walletTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  detectedBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  detectedBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.2,
   },
   walletOptionDesc: {
     fontSize: 11,

@@ -11,6 +11,8 @@ import {
 } from 'react-native'
 import Svg, { Path, Rect, Circle } from 'react-native-svg'
 import { useTheme } from '../ThemeContext'
+import { useAuth } from '../AuthContext'
+import { MetaMaskIcon, WalletConnectIcon } from '../components/Icons'
 
 interface Props {
   onPurchase: () => void
@@ -27,18 +29,22 @@ const mockResults = (q: string) => [
   { name: `${q}pay.eth`, available: true, usd: 12.0 },
 ]
 
-const PRIVY_WALLET = {
-  address: '0x71C7...3f9E',
-  ethBalance: 0.087,
-  usdBalance: 0.087 * ETH_USD,
-}
-
 export default function ENSSearchScreen({ onPurchase }: Props) {
   const { colors } = useTheme()
+  const { user } = useAuth()
   const [query, setQuery] = useState('smith')
   const [state, setState] = useState<ResultState>('results')
   const [selected, setSelected] = useState('smithfam.eth')
   const [confirming, setConfirming] = useState(false)
+
+  const walletAddress = user?.address
+    ? user.address.length > 15
+      ? `${user.address.slice(0, 6)}...${user.address.slice(-4)}`
+      : user.address
+    : '0x71C7...3f9E'
+
+  const ethBalance = 0.087
+  const usdBalance = ethBalance * ETH_USD
 
   useEffect(() => {
     if (!query) {
@@ -56,7 +62,7 @@ export default function ENSSearchScreen({ onPurchase }: Props) {
   const regEth = selectedResult ? usdToEth(selectedResult.usd ?? 0) : 0
   const gasEth = 0.00012
   const totalEth = regEth + gasEth
-  const sufficient = PRIVY_WALLET.ethBalance >= totalEth
+  const sufficient = ethBalance >= totalEth
 
   const handleConfirm = () => {
     setConfirming(true)
@@ -237,7 +243,7 @@ export default function ENSSearchScreen({ onPurchase }: Props) {
               Pay from Wallet
             </Text>
 
-            {/* Privy embedded wallet */}
+            {/* Connected Wallet (External or Embedded) */}
             <View
               style={[
                 styles.walletCard,
@@ -257,27 +263,37 @@ export default function ENSSearchScreen({ onPurchase }: Props) {
                     },
                   ]}
                 >
-                  <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
-                    <Rect x="3" y="6" width="18" height="13" rx="2" stroke={colors.accent} strokeWidth={1.6} />
-                    <Path d="M3 10h18" stroke={colors.accent} strokeWidth={1.4} />
-                    <Circle cx="7" cy="14.5" r="1.5" fill={colors.accent} />
-                  </Svg>
+                  {user?.authMethod === 'metamask' ? (
+                    <MetaMaskIcon size={22} />
+                  ) : user?.authMethod === 'walletconnect' ? (
+                    <WalletConnectIcon size={22} />
+                  ) : (
+                    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+                      <Rect x="3" y="6" width="18" height="13" rx="2" stroke={colors.accent} strokeWidth={1.6} />
+                      <Path d="M3 10h18" stroke={colors.accent} strokeWidth={1.4} />
+                      <Circle cx="7" cy="14.5" r="1.5" fill={colors.accent} />
+                    </Svg>
+                  )}
                 </View>
                 <View style={styles.walletInfo}>
                   <Text style={[styles.walletTitle, { color: colors.fg3 }]}>
-                    Privy Embedded Wallet
+                    {user?.authMethod === 'metamask'
+                      ? 'MetaMask Wallet'
+                      : user?.authMethod === 'walletconnect'
+                      ? 'WalletConnect'
+                      : 'Privy Embedded Wallet'}
                   </Text>
                   <Text style={[styles.walletAddress, { color: colors.fg }]}>
-                    {PRIVY_WALLET.address}
+                    {walletAddress}
                   </Text>
                 </View>
                 <View style={styles.walletBalanceBox}>
                   <Text style={[styles.walletBalanceEth, { color: colors.fg }]}>
-                    {PRIVY_WALLET.ethBalance.toFixed(4)}{' '}
+                    {ethBalance.toFixed(4)}{' '}
                     <Text style={{ fontSize: 11, color: colors.fg3 }}>ETH</Text>
                   </Text>
                   <Text style={[styles.walletBalanceUsd, { color: colors.fg3 }]}>
-                    ≈ ${PRIVY_WALLET.usdBalance.toFixed(0)}
+                    ≈ ${usdBalance.toFixed(0)}
                   </Text>
                 </View>
               </View>
@@ -352,7 +368,7 @@ export default function ENSSearchScreen({ onPurchase }: Props) {
                     { color: sufficient ? colors.fg2 : '#FF4757' },
                   ]}
                 >
-                  {(PRIVY_WALLET.ethBalance - totalEth).toFixed(5)} ETH
+                  {(ethBalance - totalEth).toFixed(5)} ETH
                 </Text>
               </View>
             </View>
