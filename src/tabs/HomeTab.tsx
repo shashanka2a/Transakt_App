@@ -8,7 +8,6 @@ import {
   Animated,
   Platform,
   Linking,
-  Modal,
   ActivityIndicator,
 } from 'react-native'
 import { Tab } from '../App'
@@ -25,57 +24,14 @@ import {
   IconMoon,
   IconSwap,
   EthDiamond,
-  IconX,
 } from '../components/Icons'
 import {
   getSepoliaBalance,
   watchSepoliaBalance,
-  claimInAppGasGrant,
+  getLiveAssetTransfers,
+  OnchainTransfer,
   isValidEthereumAddress,
 } from '../services/alchemyFaucetService'
-
-const activityData = [
-  {
-    id: 1,
-    name: '$mom.smith.fam.eth',
-    note: 'Weekly transfer',
-    time: '2h ago',
-    amount: '+0.04 ETH',
-    pos: true,
-    initials: 'MS',
-    hue: 150,
-  },
-  {
-    id: 2,
-    name: 'Uniswap V3',
-    note: 'ETH → USDC swap',
-    time: '5h ago',
-    amount: '-0.01 ETH',
-    pos: false,
-    initials: 'UN',
-    hue: 240,
-  },
-  {
-    id: 3,
-    name: '$dad.smith.fam.eth',
-    note: 'Allowance payout',
-    time: 'Yesterday',
-    amount: '+0.015 ETH',
-    pos: true,
-    initials: 'DS',
-    hue: 150,
-  },
-  {
-    id: 4,
-    name: 'OpenSea',
-    note: 'NFT mint · CryptoPunk',
-    time: 'Yesterday',
-    amount: '-0.08 ETH',
-    pos: false,
-    initials: 'OS',
-    hue: 210,
-  },
-]
 
 const nodes = [
   {
@@ -145,11 +101,8 @@ export default function HomeTab({
   const { theme, colors, toggle } = useTheme()
   const { user } = useAuth()
   const [liveBalance, setLiveBalance] = useState<number | null>(null)
-  const [isFunding, setIsFunding] = useState(false)
-  const [showFaucetModal, setShowFaucetModal] = useState(false)
-  const [copied, setCopied] = useState(false)
-  const [isRefreshingBal, setIsRefreshingBal] = useState(false)
-  const [grantSuccessMsg, setGrantSuccessMsg] = useState<string | null>(null)
+  const [liveTransfers, setLiveTransfers] = useState<OnchainTransfer[]>([])
+  const [isLoadingTransfers, setIsLoadingTransfers] = useState(false)
 
   const rawAddress =
     user?.address && isValidEthereumAddress(user.address)
@@ -157,7 +110,7 @@ export default function HomeTab({
       : '0x71C8a27B2f90A2E80562eA9b294D0A38e83f3F9E'
   const activeEns = user?.ensName || 'smithfam.eth'
 
-  // Fetch actual live balance from Sepolia
+  // 1. Fetch actual live onchain balance
   useEffect(() => {
     let isMounted = true
 
@@ -175,32 +128,31 @@ export default function HomeTab({
     }
   }, [rawAddress])
 
-  const handleCopyAddress = () => {
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
+  // 2. Fetch actual live onchain transactions
+  useEffect(() => {
+    let isMounted = true
+    setIsLoadingTransfers(true)
 
-  const handleFundWallet = async () => {
-    if (isFunding) return
-    setIsFunding(true)
-    setGrantSuccessMsg(null)
-    try {
-      const grant = await claimInAppGasGrant(rawAddress)
-      if (grant.success) {
-        setLiveBalance((prev) => (prev !== null ? prev + grant.amountEth : grant.amountEth))
-        setGrantSuccessMsg('✓ Wallet funded with +0.05 Sepolia ETH! Ready to test.')
-        setTimeout(() => setGrantSuccessMsg(null), 8000)
-      }
-    } catch (err) {
-      console.warn('Funding failed:', err)
-    } finally {
-      setIsFunding(false)
+    getLiveAssetTransfers(rawAddress)
+      .then((transfers) => {
+        if (isMounted) {
+          setLiveTransfers(transfers)
+          setIsLoadingTransfers(false)
+        }
+      })
+      .catch(() => {
+        if (isMounted) setIsLoadingTransfers(false)
+      })
+
+    return () => {
+      isMounted = false
     }
-  }
+  }, [rawAddress])
 
-  const effectiveEth = liveBalance !== null && liveBalance > 0 ? liveBalance : 0.45
+  // Calculate actual live USD treasury
+  const actualEth = liveBalance !== null ? liveBalance : 0
   const ethPriceUsd = 3240.50
-  const totalUsd = effectiveEth * ethPriceUsd
+  const totalUsd = actualEth * ethPriceUsd
   const [usdInt, usdDec] = totalUsd
     .toLocaleString('en-US', {
       minimumFractionDigits: 2,
@@ -215,37 +167,22 @@ export default function HomeTab({
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-      {/* Top Header Bar */}
-      <View style={styles.topBar}>
-        <View
-          style={[
-            styles.familyPill,
-            {
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-            },
-          ]}
-        >
-          <View style={[styles.familyDot, { backgroundColor: colors.accent }]} />
-          <Text style={[styles.familyPillText, { color: colors.fg }]}>
-            {activeEns}
-          </Text>
-        </View>
-
-        <View style={styles.topRightActions}>
-          <TouchableOpacity
-            activeOpacity={0.75}
-            onPress={() => setShowFaucetModal(true)}
+        {/* Top Header Bar */}
+        <View style={styles.topBar}>
+          <View
             style={[
-              styles.faucetBtn,
+              styles.familyPill,
               {
-                backgroundColor: 'rgba(29, 93, 58, 0.12)',
-                borderColor: 'rgba(29, 93, 58, 0.25)',
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
               },
             ]}
           >
-            <Text style={styles.faucetBtnText}>🚰 Faucet</Text>
-          </TouchableOpacity>
+            <View style={[styles.familyDot, { backgroundColor: colors.accent }]} />
+            <Text style={[styles.familyPillText, { color: colors.fg }]}>
+              {activeEns}
+            </Text>
+          </View>
 
           <TouchableOpacity
             activeOpacity={0.75}
@@ -265,445 +202,255 @@ export default function HomeTab({
             )}
           </TouchableOpacity>
         </View>
-      </View>
 
-      {/* Funded notification toast */}
-      {grantSuccessMsg && (
-        <TouchableOpacity
-          activeOpacity={0.8}
-          onPress={() => Linking.openURL(`https://sepolia.etherscan.io/address/${rawAddress}`)}
-          style={styles.fundedToast}
-        >
-          <Text style={styles.fundedToastText}>
-            {grantSuccessMsg}{' '}
-            <Text style={{ textDecorationLine: 'underline', fontWeight: '800' }}>
-              Verify on Etherscan ↗
-            </Text>
+        {/* Hero Treasury Balance (Actual Live Balance) */}
+        <View style={styles.heroTreasury}>
+          <Text style={[styles.heroLabel, { color: colors.fg3 }]}>
+            Family Treasury
           </Text>
-        </TouchableOpacity>
-      )}
 
-      {/* Hero Treasury Balance (Live Actual Balance) */}
-      <View style={styles.heroTreasury}>
-        <Text style={[styles.heroLabel, { color: colors.fg3 }]}>
-          Family Treasury
-        </Text>
-
-        <View style={styles.balanceRow}>
-          <Text style={[styles.balanceDollar, { color: colors.fg3 }]}>$</Text>
-          <Text style={[styles.balanceInt, { color: colors.fg }]}>{usdInt}</Text>
-          <Text style={[styles.balanceDec, { color: colors.fg3 }]}>.{usdDec}</Text>
-        </View>
-
-        {/* ETH Pill (Tap to open Faucet) */}
-        <TouchableOpacity
-          activeOpacity={0.8}
-          onPress={() => setShowFaucetModal(true)}
-          style={[
-            styles.ethPill,
-            {
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-            },
-          ]}
-        >
-          <EthDiamond size={13} color={colors.fg3} />
-          <Text style={[styles.ethPillAmount, { color: colors.fg }]}>
-            {effectiveEth.toFixed(4)} ETH
-          </Text>
-          <Text style={styles.ethPillChange}>Sepolia Live 🚰</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Quick Action Circles */}
-      <View style={styles.quickActionsContainer}>
-        <View style={styles.quickActionsRow}>
-          {[
-            {
-              label: 'Send',
-              action: () => onNavigate('send'),
-              Icon: IconSend,
-            },
-            {
-              label: 'Request',
-              action: onOpenRequest,
-              Icon: IconRequest,
-            },
-            {
-              label: 'Manage',
-              action: () => onNavigate('permissions'),
-              Icon: IconUsers,
-            },
-            {
-              label: 'Swap',
-              action: onOpenSwap,
-              Icon: IconSwap,
-            },
-          ].map(({ label, action, Icon }) => (
-            <TouchableOpacity
-              key={label}
-              activeOpacity={0.8}
-              onPress={action}
-              style={styles.actionButton}
-            >
-              <View
-                style={[
-                  styles.actionCircle,
-                  {
-                    backgroundColor: colors.surface,
-                    borderColor: colors.border,
-                  },
-                ]}
-              >
-                <Icon size={22} color={colors.fg} />
-              </View>
-              <Text style={[styles.actionLabel, { color: colors.fg2 }]}>
-                {label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-
-      {/* Family Nodes Horizontal Cards */}
-      <View style={styles.nodesSection}>
-        <View style={styles.sectionHeaderRow}>
-          <Text style={[styles.sectionTitle, { color: colors.fg3 }]}>
-            Family Nodes
-          </Text>
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={() => onNavigate('permissions')}
-          >
-            <Text style={[styles.sectionActionText, { color: colors.accent }]}>
-              Manage →
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.horizontalNodesScroll}
-        >
-          {nodes.map((node) => (
-            <NodeCard key={node.id} node={node} />
-          ))}
-        </ScrollView>
-      </View>
-
-      {/* Recent Activity */}
-      <View style={styles.activitySection}>
-        <View style={styles.sectionHeaderRow}>
-          <Text style={[styles.sectionTitle, { color: colors.fg3 }]}>
-            Recent Activity
-          </Text>
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={() => onNavigate('activity')}
-          >
-            <Text style={[styles.sectionActionText, { color: colors.accent }]}>
-              See All →
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        <View
-          style={[
-            styles.activityCard,
-            {
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-            },
-          ]}
-        >
-          {activityData.map((item, i) => (
-            <View
-              key={item.id}
-              style={[
-                styles.activityRow,
-                {
-                  borderBottomColor: colors.border,
-                  borderBottomWidth: i < activityData.length - 1 ? 1 : 0,
-                },
-              ]}
-            >
-              <View
-                style={[
-                  styles.activityAvatar,
-                  {
-                    backgroundColor: `hsl(${item.hue}, 30%, ${item.pos ? '88%' : '82%'})`,
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.activityAvatarText,
-                    { color: `hsl(${item.hue}, 40%, 28%)` },
-                  ]}
-                >
-                  {item.initials}
-                </Text>
-              </View>
-
-              <View style={styles.activityInfo}>
-                <Text
-                  numberOfLines={1}
-                  style={[styles.activityName, { color: colors.fg }]}
-                >
-                  {item.name}
-                </Text>
-                <Text style={[styles.activityMeta, { color: colors.fg2 }]}>
-                  {item.note} · {item.time}
-                </Text>
-              </View>
-
-              <Text
-                style={[
-                  styles.activityAmount,
-                  { color: item.pos ? '#1DB563' : colors.fg },
-                ]}
-              >
-                {item.amount}
-              </Text>
-            </View>
-          ))}
-        </View>
-      </View>
-
-      {/* ── Testnet Verification Link at Bottom ── */}
-      <TouchableOpacity
-        activeOpacity={0.7}
-        onPress={() =>
-          Linking.openURL(`https://sepolia.etherscan.io/address/${rawAddress}`)
-        }
-        style={styles.bottomVerifyLink}
-      >
-        <EthDiamond size={13} color="#1D5D3A" />
-        <Text style={[styles.bottomVerifyText, { color: colors.fg3 }]}>
-          Ethereum Sepolia Testnet ·{' '}
-          <Text style={{ color: '#1D5D3A', fontWeight: '700' }}>
-            Verify Transactions on Etherscan ↗
-          </Text>
-        </Text>
-      </TouchableOpacity>
-    </ScrollView>
-
-    {/* ── Faucet & Gas Grant Popup Modal ── */}
-    <Modal
-      visible={showFaucetModal}
-      transparent
-      animationType="fade"
-      onRequestClose={() => setShowFaucetModal(false)}
-    >
-      <View style={styles.modalOverlay}>
-        <View
-          style={[
-            styles.faucetModalCard,
-            {
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-            },
-          ]}
-        >
-          {/* Modal Header */}
-          <View style={styles.faucetModalHeader}>
-            <View style={styles.faucetModalHeaderLeft}>
-              <View style={styles.faucetModalIconCircle}>
-                <EthDiamond size={18} color="#1D5D3A" />
-              </View>
-              <View>
-                <Text style={[styles.faucetModalTitle, { color: colors.fg }]}>
-                  Sepolia Testnet Faucet
-                </Text>
-                <Text style={[styles.faucetModalSubtitle, { color: colors.fg3 }]}>
-                  Fund your Transakt Smart Account
-                </Text>
-              </View>
-            </View>
-            <TouchableOpacity
-              onPress={() => setShowFaucetModal(false)}
-              style={[styles.closeIconBtn, { backgroundColor: colors.bg }]}
-            >
-              <IconX size={14} color={colors.fg2} />
-            </TouchableOpacity>
+          <View style={styles.balanceRow}>
+            <Text style={[styles.balanceDollar, { color: colors.fg3 }]}>$</Text>
+            <Text style={[styles.balanceInt, { color: colors.fg }]}>{usdInt}</Text>
+            <Text style={[styles.balanceDec, { color: colors.fg3 }]}>.{usdDec}</Text>
           </View>
 
-          {/* Wallet Address & Live Balance Box */}
+          {/* Clean ETH Pill */}
           <View
             style={[
-              styles.faucetAccountBox,
-              { backgroundColor: colors.bg, borderColor: colors.border },
-            ]}
-          >
-            <View style={styles.faucetAccountRow}>
-              <View style={{ flex: 1, paddingRight: 8 }}>
-                <Text style={[styles.faucetAccountLabel, { color: colors.fg3 }]}>
-                  Your Sepolia Address
-                </Text>
-                <Text
-                  style={[styles.faucetAddressText, { color: colors.fg }]}
-                  numberOfLines={1}
-                  ellipsizeMode="middle"
-                >
-                  {rawAddress}
-                </Text>
-              </View>
-              <TouchableOpacity
-                onPress={handleCopyAddress}
-                style={[
-                  styles.copyPillBtn,
-                  { backgroundColor: copied ? '#1D5D3A' : 'rgba(29, 93, 58, 0.12)' },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.copyPillText,
-                    { color: copied ? '#F5F3EB' : '#1D5D3A' },
-                  ]}
-                >
-                  {copied ? '✓ Copied' : 'Copy'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={[styles.faucetDivider, { backgroundColor: colors.border }]} />
-
-            <View style={styles.faucetBalanceRow}>
-              <View>
-                <Text style={[styles.faucetAccountLabel, { color: colors.fg3 }]}>
-                  Live Onchain Balance
-                </Text>
-                <Text style={[styles.faucetBalanceBig, { color: colors.fg }]}>
-                  {liveBalance !== null ? `${liveBalance.toFixed(4)} ETH` : '0.0000 ETH'}
-                </Text>
-              </View>
-              <TouchableOpacity
-                disabled={isRefreshingBal}
-                onPress={async () => {
-                  setIsRefreshingBal(true)
-                  const bal = await getSepoliaBalance(rawAddress)
-                  setLiveBalance(bal)
-                  setIsRefreshingBal(false)
-                }}
-                style={styles.refreshBalBtn}
-              >
-                {isRefreshingBal ? (
-                  <ActivityIndicator size="small" color="#1D5D3A" />
-                ) : (
-                  <Text style={styles.refreshBalText}>↻ Check</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Grant success alert */}
-          {grantSuccessMsg && (
-            <View style={styles.grantSuccessBanner}>
-              <Text style={styles.grantSuccessBannerText}>{grantSuccessMsg}</Text>
-            </View>
-          )}
-
-          {/* Section 1: In-App Instant Gas Sponsorship */}
-          <View
-            style={[
-              styles.grantCard,
+              styles.ethPill,
               {
-                backgroundColor: 'rgba(29, 93, 58, 0.06)',
-                borderColor: 'rgba(29, 93, 58, 0.22)',
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
               },
             ]}
           >
-            <View style={styles.grantHeader}>
-              <Text style={styles.grantTitle}>⚡ Instant In-App Gas Grant</Text>
-              <View style={styles.grantBadge}>
-                <Text style={styles.grantBadgeText}>ZERO FEES</Text>
-              </View>
-            </View>
-            <Text style={[styles.grantDesc, { color: colors.fg3 }]}>
-              Transakt Smart Accounts include native gas sponsorship for all ENS registrations and vault actions.
+            <EthDiamond size={13} color={colors.fg3} />
+            <Text style={[styles.ethPillAmount, { color: colors.fg }]}>
+              {actualEth.toFixed(4)} ETH
             </Text>
+          </View>
+        </View>
 
-            <TouchableOpacity
-              activeOpacity={0.8}
-              disabled={isFunding}
-              onPress={handleFundWallet}
-              style={styles.claimGrantBtn}
-            >
-              {isFunding ? (
-                <ActivityIndicator size="small" color="#F5F3EB" />
-              ) : (
-                <Text style={styles.claimGrantBtnText}>
-                  Claim +0.05 Sepolia Gas Grant
+        {/* Quick Action Circles */}
+        <View style={styles.quickActionsContainer}>
+          <View style={styles.quickActionsRow}>
+            {[
+              {
+                label: 'Send',
+                action: () => onNavigate('send'),
+                Icon: IconSend,
+              },
+              {
+                label: 'Request',
+                action: onOpenRequest,
+                Icon: IconRequest,
+              },
+              {
+                label: 'Manage',
+                action: () => onNavigate('permissions'),
+                Icon: IconUsers,
+              },
+              {
+                label: 'Swap',
+                action: onOpenSwap,
+                Icon: IconSwap,
+              },
+            ].map(({ label, action, Icon }) => (
+              <TouchableOpacity
+                key={label}
+                activeOpacity={0.8}
+                onPress={action}
+                style={styles.actionButton}
+              >
+                <View
+                  style={[
+                    styles.actionCircle,
+                    {
+                      backgroundColor: colors.surface,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                >
+                  <Icon size={22} color={colors.fg} />
+                </View>
+                <Text style={[styles.actionLabel, { color: colors.fg2 }]}>
+                  {label}
                 </Text>
-              )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {/* Family Nodes Horizontal Cards */}
+        <View style={styles.nodesSection}>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={[styles.sectionTitle, { color: colors.fg3 }]}>
+              Family Nodes
+            </Text>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => onNavigate('permissions')}
+            >
+              <Text style={[styles.sectionActionText, { color: colors.accent }]}>
+                Manage →
+              </Text>
             </TouchableOpacity>
           </View>
 
-          {/* Section 2: Official Public Faucets */}
-          <View style={styles.externalFaucetsBlock}>
-            <Text style={[styles.externalFaucetsTitle, { color: colors.fg3 }]}>
-              Official Web3 Faucets (Real Onchain ETH)
-            </Text>
-            <Text style={[styles.externalFaucetsSubtitle, { color: colors.fg3 }]}>
-              Address auto-copies when tapping any faucet below:
-            </Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.horizontalNodesScroll}
+          >
+            {nodes.map((node) => (
+              <NodeCard key={node.id} node={node} />
+            ))}
+          </ScrollView>
+        </View>
 
-            <View style={styles.faucetsGrid}>
-              {[
-                {
-                  name: 'Google Cloud Web3 Faucet',
-                  url: 'https://cloud.google.com/application/web3/faucet/ethereum/sepolia',
-                },
-                {
-                  name: 'Sepolia PoW Faucet',
-                  url: 'https://sepolia-faucet.pk910.de/',
-                },
-                {
-                  name: 'Chainlink Faucet',
-                  url: 'https://faucets.chain.link/sepolia',
-                },
-                {
-                  name: 'SepoliaFaucet.com',
-                  url: 'https://sepoliafaucet.com/',
-                },
-              ].map((f) => (
-                <TouchableOpacity
-                  key={f.name}
-                  activeOpacity={0.7}
-                  onPress={() => {
-                    handleCopyAddress()
-                    Linking.openURL(f.url)
-                  }}
-                  style={[
-                    styles.faucetChip,
-                    { backgroundColor: colors.bg, borderColor: colors.border },
-                  ]}
-                >
-                  <Text style={[styles.faucetChipText, { color: colors.fg }]}>
-                    {f.name} ↗
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+        {/* Recent Activity (Actual Live Transactions) */}
+        <View style={styles.activitySection}>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={[styles.sectionTitle, { color: colors.fg3 }]}>
+              Recent Activity
+            </Text>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => onNavigate('activity')}
+            >
+              <Text style={[styles.sectionActionText, { color: colors.accent }]}>
+                See All →
+              </Text>
+            </TouchableOpacity>
           </View>
 
-          {/* Etherscan Verification Link */}
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={() => Linking.openURL(`https://sepolia.etherscan.io/address/${rawAddress}`)}
-            style={styles.etherscanAddressBtn}
+          <View
+            style={[
+              styles.activityCard,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+              },
+            ]}
           >
-            <Text style={[styles.etherscanAddressText, { color: colors.fg3 }]}>
-              Verify wallet on{' '}
-              <Text style={{ color: '#1D5D3A', fontWeight: '800' }}>
-                Sepolia Etherscan ↗
-              </Text>
-            </Text>
-          </TouchableOpacity>
+            {isLoadingTransfers ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="small" color="#1D5D3A" />
+                <Text style={[styles.loadingText, { color: colors.fg3 }]}>
+                  Syncing onchain transactions...
+                </Text>
+              </View>
+            ) : liveTransfers.length > 0 ? (
+              liveTransfers.slice(0, 4).map((item, i) => {
+                const isIncoming = item.direction === 'in'
+                const displayAddr = isIncoming ? item.from : item.to
+                const shortCounterparty = displayAddr
+                  ? `${displayAddr.slice(0, 6)}...${displayAddr.slice(-4)}`
+                  : 'Contract'
+
+                return (
+                  <TouchableOpacity
+                    key={item.hash + i}
+                    activeOpacity={0.7}
+                    onPress={() =>
+                      Linking.openURL(`https://sepolia.etherscan.io/tx/${item.hash}`)
+                    }
+                    style={[
+                      styles.activityRow,
+                      {
+                        borderBottomColor: colors.border,
+                        borderBottomWidth:
+                          i < Math.min(liveTransfers.length, 4) - 1 ? 1 : 0,
+                      },
+                    ]}
+                  >
+                    <View
+                      style={[
+                        styles.activityAvatar,
+                        {
+                          backgroundColor: isIncoming
+                            ? 'rgba(29, 181, 99, 0.12)'
+                            : 'rgba(239, 68, 68, 0.12)',
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.activityAvatarText,
+                          { color: isIncoming ? '#1DB563' : '#EF4444' },
+                        ]}
+                      >
+                        {isIncoming ? '↓' : '↑'}
+                      </Text>
+                    </View>
+
+                    <View style={styles.activityInfo}>
+                      <Text
+                        numberOfLines={1}
+                        style={[styles.activityName, { color: colors.fg }]}>
+                        {isIncoming
+                          ? `Received from ${shortCounterparty}`
+                          : `Sent to ${shortCounterparty}`}
+                      </Text>
+                      <Text style={[styles.activityMeta, { color: colors.fg2 }]}>
+                        {item.category.toUpperCase()} · Block #{parseInt(item.blockNum, 16)}
+                      </Text>
+                    </View>
+
+                    <Text
+                      style={[
+                        styles.activityAmount,
+                        { color: isIncoming ? '#1DB563' : colors.fg },
+                      ]}
+                    >
+                      {isIncoming ? '+' : '-'}
+                      {item.value.toFixed(4)} {item.asset}
+                    </Text>
+                  </TouchableOpacity>
+                )
+              })
+            ) : (
+              <View style={styles.emptyActivityContainer}>
+                <Text style={[styles.emptyActivityTitle, { color: colors.fg }]}>
+                  No Recent Transactions
+                </Text>
+                <Text style={[styles.emptyActivitySubtitle, { color: colors.fg3 }]}>
+                  All onchain deposits, transfers, and family treasury operations will appear here in real-time.
+                </Text>
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() =>
+                    Linking.openURL(`https://sepolia.etherscan.io/address/${rawAddress}`)
+                  }
+                  style={[styles.emptyVerifyBtn, { borderColor: colors.border }]}
+                >
+                  <Text style={[styles.emptyVerifyBtnText, { color: colors.accent }]}>
+                    View Address on Etherscan ↗
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
         </View>
-      </View>
-    </Modal>
+
+        {/* ── Testnet Verification Link at Bottom ── */}
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={() =>
+            Linking.openURL(`https://sepolia.etherscan.io/address/${rawAddress}`)
+          }
+          style={styles.bottomVerifyLink}
+        >
+          <EthDiamond size={13} color="#1D5D3A" />
+          <Text style={[styles.bottomVerifyText, { color: colors.fg3 }]}>
+            Ethereum Network ·{' '}
+            <Text style={{ color: '#1D5D3A', fontWeight: '700' }}>
+              Verify Transactions on Etherscan ↗
+            </Text>
+          </Text>
+        </TouchableOpacity>
+      </ScrollView>
     </View>
   )
 }
@@ -826,38 +573,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
-  topRightActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  faucetBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 14,
-    borderWidth: 1,
-  },
-  faucetBtnText: {
-    color: '#1D5D3A',
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  fundedToast: {
-    backgroundColor: 'rgba(29, 93, 58, 0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(29, 93, 58, 0.25)',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    marginHorizontal: 24,
-    marginBottom: 8,
-    alignItems: 'center',
-  },
-  fundedToastText: {
-    color: '#1D5D3A',
-    fontSize: 12,
-    fontWeight: '700',
-  },
   themeToggleBtn: {
     width: 36,
     height: 36,
@@ -914,11 +629,6 @@ const styles = StyleSheet.create({
   ethPillAmount: {
     fontSize: 13,
     fontWeight: '700',
-  },
-  ethPillChange: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#1DB563',
   },
   quickActionsContainer: {
     paddingHorizontal: 24,
@@ -1047,6 +757,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     overflow: 'hidden',
   },
+  loadingContainer: {
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  loadingText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
   activityRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1062,7 +782,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   activityAvatarText: {
-    fontSize: 11,
+    fontSize: 14,
     fontWeight: '900',
   },
   activityInfo: {
@@ -1081,6 +801,33 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
+  emptyActivityContainer: {
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  emptyActivityTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  emptyActivitySubtitle: {
+    fontSize: 11,
+    textAlign: 'center',
+    lineHeight: 16,
+    maxWidth: 260,
+  },
+  emptyVerifyBtn: {
+    marginTop: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  emptyVerifyBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
   bottomVerifyLink: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1098,204 +845,5 @@ const styles = StyleSheet.create({
   bottomVerifyText: {
     fontSize: 12,
     fontWeight: '500',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.68)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  faucetModalCard: {
-    width: '100%',
-    maxWidth: 380,
-    borderRadius: 24,
-    borderWidth: 1,
-    padding: 20,
-    gap: 14,
-  },
-  faucetModalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  faucetModalHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    flex: 1,
-  },
-  faucetModalIconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(29, 93, 58, 0.14)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  faucetModalTitle: {
-    fontSize: 17,
-    fontWeight: '900',
-  },
-  faucetModalSubtitle: {
-    fontSize: 11,
-    fontWeight: '500',
-  },
-  closeIconBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  faucetAccountBox: {
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 12,
-    gap: 10,
-  },
-  faucetAccountRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  faucetAccountLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  faucetAddressText: {
-    fontSize: 12,
-    fontWeight: '700',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    marginTop: 2,
-  },
-  copyPillBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 10,
-  },
-  copyPillText: {
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  faucetDivider: {
-    height: 1,
-    width: '100%',
-  },
-  faucetBalanceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  faucetBalanceBig: {
-    fontSize: 18,
-    fontWeight: '900',
-    marginTop: 2,
-  },
-  refreshBalBtn: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    backgroundColor: 'rgba(29, 93, 58, 0.1)',
-  },
-  refreshBalText: {
-    color: '#1D5D3A',
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  grantSuccessBanner: {
-    backgroundColor: 'rgba(29, 93, 58, 0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(29, 93, 58, 0.3)',
-    borderRadius: 10,
-    padding: 8,
-    alignItems: 'center',
-  },
-  grantSuccessBannerText: {
-    color: '#1D5D3A',
-    fontSize: 11,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  grantCard: {
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 14,
-    gap: 6,
-  },
-  grantHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  grantTitle: {
-    fontSize: 13,
-    fontWeight: '900',
-    color: '#1D5D3A',
-  },
-  grantBadge: {
-    backgroundColor: '#1D5D3A',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  grantBadgeText: {
-    color: '#F5F3EB',
-    fontSize: 8,
-    fontWeight: '900',
-  },
-  grantDesc: {
-    fontSize: 11,
-    lineHeight: 15,
-  },
-  claimGrantBtn: {
-    backgroundColor: '#1D5D3A',
-    borderRadius: 14,
-    height: 38,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 4,
-  },
-  claimGrantBtnText: {
-    color: '#F5F3EB',
-    fontSize: 12,
-    fontWeight: '900',
-  },
-  externalFaucetsBlock: {
-    gap: 6,
-  },
-  externalFaucetsTitle: {
-    fontSize: 11,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-  },
-  externalFaucetsSubtitle: {
-    fontSize: 11,
-  },
-  faucetsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 2,
-  },
-  faucetChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  faucetChipText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  etherscanAddressBtn: {
-    alignItems: 'center',
-    paddingVertical: 4,
-  },
-  etherscanAddressText: {
-    fontSize: 11,
-    fontWeight: '600',
   },
 })

@@ -104,9 +104,9 @@ export default function ENSDashboardScreen({ onEnterApp }: Props) {
     }
   }, [rawAddress])
 
-  const effectiveEth = liveBalance !== null && liveBalance > 0 ? liveBalance : 0.45
+  const actualEth = liveBalance !== null ? liveBalance : 0
   const ethPriceUsd = 3240.50
-  const totalUsd = (effectiveEth * ethPriceUsd).toLocaleString('en-US', {
+  const totalUsd = (actualEth * ethPriceUsd).toLocaleString('en-US', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })
@@ -213,7 +213,7 @@ export default function ENSDashboardScreen({ onEnterApp }: Props) {
             ${totalUsd}
           </Text>
           <Text style={[styles.heroSubtext, { color: colors.fg2 }]}>
-            {effectiveEth.toFixed(4)} ETH · Sepolia Live · {activeEns}
+            {actualEth.toFixed(4)} ETH · {activeEns}
           </Text>
 
           <TouchableOpacity
@@ -373,7 +373,7 @@ export default function ENSDashboardScreen({ onEnterApp }: Props) {
           >
             <EthDiamond size={13} color="#1D5D3A" />
             <Text style={[styles.bottomVerifyText, { color: colors.fg3 }]}>
-              Ethereum Sepolia Testnet ·{' '}
+              Ethereum Network ·{' '}
               <Text style={{ color: '#1D5D3A', fontWeight: '700' }}>
                 Verify Onchain Activity on Etherscan ↗
               </Text>

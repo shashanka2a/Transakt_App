@@ -116,3 +116,100 @@ export function watchSepoliaBalance(
 
 // Backward compatibility alias
 export const watchAlchemyBalance = watchSepoliaBalance
+
+export interface OnchainTransfer {
+  hash: string
+  blockNum: string
+  from: string
+  to: string
+  value: number
+  asset: string
+  category: string
+  direction: 'in' | 'out'
+  timestamp?: string
+}
+
+/**
+ * Fetches actual onchain transaction history (incoming and outgoing) for an address.
+ */
+export async function getLiveAssetTransfers(address: string): Promise<OnchainTransfer[]> {
+  const cleanAddr = address?.trim()
+  if (!isValidEthereumAddress(cleanAddr)) {
+    return []
+  }
+
+  try {
+    const [inRes, outRes] = await Promise.all([
+      fetch(SEPOLIA_CONFIG.rpcUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'alchemy_getAssetTransfers',
+          params: [
+            {
+              fromBlock: '0x0',
+              toAddress: cleanAddr,
+              category: ['external', 'internal', 'erc20'],
+              order: 'desc',
+              maxCount: '0x14',
+            },
+          ],
+        }),
+      }).then((r) => r.json()).catch(() => ({})),
+
+      fetch(SEPOLIA_CONFIG.rpcUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 2,
+          method: 'alchemy_getAssetTransfers',
+          params: [
+            {
+              fromBlock: '0x0',
+              fromAddress: cleanAddr,
+              category: ['external', 'internal', 'erc20'],
+              order: 'desc',
+              maxCount: '0x14',
+            },
+          ],
+        }),
+      }).then((r) => r.json()).catch(() => ({})),
+    ])
+
+    const incoming: OnchainTransfer[] = (inRes?.result?.transfers || []).map((t: any) => ({
+      hash: t.hash,
+      blockNum: t.blockNum,
+      from: t.from,
+      to: t.to,
+      value: t.value !== null ? parseFloat(t.value) : 0,
+      asset: t.asset || 'ETH',
+      category: t.category,
+      direction: 'in' as const,
+    }))
+
+    const outgoing: OnchainTransfer[] = (outRes?.result?.transfers || []).map((t: any) => ({
+      hash: t.hash,
+      blockNum: t.blockNum,
+      from: t.from,
+      to: t.to,
+      value: t.value !== null ? parseFloat(t.value) : 0,
+      asset: t.asset || 'ETH',
+      category: t.category,
+      direction: 'out' as const,
+    }))
+
+    const combined = [...incoming, ...outgoing].sort((a, b) => {
+      const bNum = parseInt(b.blockNum, 16) || 0
+      const aNum = parseInt(a.blockNum, 16) || 0
+      return bNum - aNum
+    })
+
+    return combined
+  } catch (err) {
+    console.warn('[Onchain] Failed to fetch transfers:', err)
+    return []
+  }
+}

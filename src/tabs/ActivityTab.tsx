@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   View,
   Text,
@@ -7,203 +7,68 @@ import {
   ScrollView,
   Platform,
   Linking,
+  ActivityIndicator,
 } from 'react-native'
 import { useTheme } from '../ThemeContext'
 import { useAuth } from '../AuthContext'
 import { EthDiamond } from '../components/Icons'
+import {
+  getSepoliaBalance,
+  getLiveAssetTransfers,
+  OnchainTransfer,
+  isValidEthereumAddress,
+} from '../services/alchemyFaucetService'
 
-interface ActivityItem {
-  id: number
-  name: string
-  note: string
-  time: string
-  amount: string
-  pos: boolean
-  initials: string
-  hue: number
-  category: 'Family' | 'DeFi' | 'NFT'
-  txHash?: string
-}
-
-interface ActivityGroup {
-  label: string
-  items: ActivityItem[]
-}
-
-const groups: ActivityGroup[] = [
-  {
-    label: 'Today',
-    items: [
-      {
-        id: 1,
-        name: '$mom.smith.fam.eth',
-        note: 'Weekly transfer',
-        time: '2h ago',
-        amount: '+0.04 ETH',
-        pos: true,
-        initials: 'MS',
-        hue: 150,
-        category: 'Family',
-        txHash: '0x3a4b92c104db2d9b387799147d3bef32a606ea38991204859aefd123b091f82e',
-      },
-      {
-        id: 2,
-        name: 'Uniswap V3',
-        note: 'ETH → USDC swap',
-        time: '5h ago',
-        amount: '-0.01 ETH',
-        pos: false,
-        initials: 'UN',
-        hue: 240,
-        category: 'DeFi',
-        txHash: '0x71c8a27b2f90a2e80562ea9b294d0a38e83f3f9e88b2a7194091a92dfbc8129a',
-      },
-    ],
-  },
-  {
-    label: 'Yesterday',
-    items: [
-      {
-        id: 3,
-        name: '$dad.smith.fam.eth',
-        note: 'Allowance payout',
-        time: '1d ago',
-        amount: '+0.015 ETH',
-        pos: true,
-        initials: 'DS',
-        hue: 150,
-        category: 'Family',
-        txHash: '0x1ad91eec094c299f1269e64f37264ad5e5496465001928374650192837465019',
-      },
-      {
-        id: 4,
-        name: 'OpenSea',
-        note: 'NFT mint · Azuki #44',
-        time: '1d ago',
-        amount: '-0.08 ETH',
-        pos: false,
-        initials: 'OS',
-        hue: 210,
-        category: 'NFT',
-        txHash: '0x9bca473b5b8539b97779d750cde2782ef939d840112233445566778899aabbcc',
-      },
-    ],
-  },
-  {
-    label: 'This Week',
-    items: [
-      {
-        id: 5,
-        name: '$college.vault',
-        note: 'Auto-deposit',
-        time: '2d ago',
-        amount: '+0.20 ETH',
-        pos: true,
-        initials: 'CV',
-        hue: 40,
-        category: 'Family',
-        txHash: '0x4f8e91a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e',
-      },
-      {
-        id: 6,
-        name: 'Aave V3',
-        note: 'USDC deposit',
-        time: '2d ago',
-        amount: '-150 USDC',
-        pos: false,
-        initials: 'AV',
-        hue: 190,
-        category: 'DeFi',
-        txHash: '0x5a6b7c8d9e0f1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3',
-      },
-      {
-        id: 7,
-        name: '$allowance.node',
-        note: 'Weekly chore payout',
-        time: '3d ago',
-        amount: '+0.025 ETH',
-        pos: true,
-        initials: 'AN',
-        hue: 150,
-        category: 'Family',
-        txHash: '0x6b7c8d9e0f1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4',
-      },
-      {
-        id: 8,
-        name: 'Mirror.xyz',
-        note: 'Article NFT collect',
-        time: '4d ago',
-        amount: '-0.05 ETH',
-        pos: false,
-        initials: 'MX',
-        hue: 270,
-        category: 'NFT',
-        txHash: '0x7c8d9e0f1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5',
-      },
-    ],
-  },
-]
-
-const filterOptions = ['All', 'Incoming', 'Outgoing', 'Family', 'DeFi', 'NFT']
+const filterOptions = ['All', 'Incoming', 'Outgoing', 'External', 'ERC20']
 
 export default function ActivityTab() {
   const { colors } = useTheme()
   const { user } = useAuth()
   const [filter, setFilter] = useState('All')
+  const [liveBalance, setLiveBalance] = useState<number | null>(null)
+  const [liveTransfers, setLiveTransfers] = useState<OnchainTransfer[]>([])
+  const [isLoading, setIsLoading] = useState(false)
 
-  const rawAddress = user?.address || '0x71C8a27B2f90A2E80562eA9b294D0A38e83f3F9E'
+  const rawAddress =
+    user?.address && isValidEthereumAddress(user.address)
+      ? user.address
+      : '0x71C8a27B2f90A2E80562eA9b294D0A38e83f3F9E'
 
-  const allItems = groups.flatMap((g) => g.items)
-  const filtered = groups
-    .map((g) => ({
-      ...g,
-      items: g.items.filter((item) => {
-        if (filter === 'All') return true
-        if (filter === 'Incoming') return item.pos
-        if (filter === 'Outgoing') return !item.pos
-        if (filter === 'Family') return item.category === 'Family'
-        if (filter === 'DeFi') return item.category === 'DeFi'
-        if (filter === 'NFT') return item.category === 'NFT'
-        return true
-      }),
-    }))
-    .filter((g) => g.items.length > 0)
+  useEffect(() => {
+    let isMounted = true
+    setIsLoading(true)
 
-  const totalIn = allItems.filter((i) => i.pos).length
-  const totalOut = allItems.filter((i) => !i.pos).length
+    Promise.all([
+      getSepoliaBalance(rawAddress),
+      getLiveAssetTransfers(rawAddress),
+    ])
+      .then(([bal, transfers]) => {
+        if (isMounted) {
+          setLiveBalance(bal)
+          setLiveTransfers(transfers)
+          setIsLoading(false)
+        }
+      })
+      .catch(() => {
+        if (isMounted) setIsLoading(false)
+      })
 
-  const getCategoryBadgeStyle = (cat: string) => {
-    if (cat === 'Family') {
-      return {
-        color: '#1DB563',
-        bg: 'rgba(29,181,99,0.10)',
-        border: 'rgba(29,181,99,0.22)',
-      }
+    return () => {
+      isMounted = false
     }
-    if (cat === 'DeFi') {
-      return {
-        color: '#5B8EF4',
-        bg: 'rgba(91,142,244,0.10)',
-        border: 'rgba(91,142,244,0.22)',
-      }
-    }
-    if (cat === 'NFT') {
-      return {
-        color: '#A855F7',
-        bg: 'rgba(168,85,247,0.10)',
-        border: 'rgba(168,85,247,0.22)',
-      }
-    }
-    return {
-      color: colors.fg3,
-      bg: colors.raised,
-      border: colors.border,
-    }
-  }
+  }, [rawAddress])
 
-  const openTx = (_item: ActivityItem) => {
-    Linking.openURL(`https://sepolia.etherscan.io/address/${rawAddress}`)
-  }
+  const totalIn = liveTransfers.filter((i) => i.direction === 'in').length
+  const totalOut = liveTransfers.filter((i) => i.direction === 'out').length
+
+  const filteredTransfers = liveTransfers.filter((t) => {
+    if (filter === 'All') return true
+    if (filter === 'Incoming') return t.direction === 'in'
+    if (filter === 'Outgoing') return t.direction === 'out'
+    if (filter === 'External') return t.category === 'external'
+    if (filter === 'ERC20') return t.category === 'erc20'
+    return true
+  })
 
   return (
     <ScrollView
@@ -250,6 +115,23 @@ export default function ActivityTab() {
               {totalOut} txns
             </Text>
           </View>
+
+          <View
+            style={[
+              styles.summaryCard,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <Text style={[styles.summaryLabel, { color: colors.fg3 }]}>
+              Live Balance
+            </Text>
+            <Text style={[styles.summaryValue, { color: colors.accent }]}>
+              {liveBalance !== null ? `${liveBalance.toFixed(3)} ETH` : '0.000 ETH'}
+            </Text>
+          </View>
         </View>
 
         {/* Filter chips */}
@@ -269,9 +151,7 @@ export default function ActivityTab() {
                 style={[
                   styles.filterPill,
                   {
-                    backgroundColor: isSelected
-                      ? colors.accent
-                      : colors.surface,
+                    backgroundColor: isSelected ? colors.accent : colors.surface,
                     borderColor: isSelected ? colors.accent : colors.border,
                   },
                 ]}
@@ -293,37 +173,50 @@ export default function ActivityTab() {
         </ScrollView>
       </View>
 
-      {/* Grouped Activity List */}
+      {/* Transaction List */}
       <View style={styles.groupContainer}>
-        {filtered.map((group) => (
-          <View key={group.label} style={styles.groupBlock}>
-            <Text style={[styles.groupLabel, { color: colors.fg3 }]}>
-              {group.label}
-            </Text>
+        <View style={styles.groupBlock}>
+          <Text style={[styles.groupLabel, { color: colors.fg3 }]}>
+            Onchain Transactions
+          </Text>
 
-            <View
-              style={[
-                styles.groupCard,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              {group.items.map((item, i) => {
-                const catStyle = getCategoryBadgeStyle(item.category)
+          <View
+            style={[
+              styles.groupCard,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            {isLoading ? (
+              <View style={styles.loadingBox}>
+                <ActivityIndicator size="small" color="#1D5D3A" />
+                <Text style={[styles.loadingText, { color: colors.fg3 }]}>
+                  Loading live onchain transactions...
+                </Text>
+              </View>
+            ) : filteredTransfers.length > 0 ? (
+              filteredTransfers.map((item, i) => {
+                const isIncoming = item.direction === 'in'
+                const displayAddr = isIncoming ? item.from : item.to
+                const shortAddr = displayAddr
+                  ? `${displayAddr.slice(0, 6)}...${displayAddr.slice(-4)}`
+                  : 'Contract'
 
                 return (
                   <TouchableOpacity
-                    key={item.id}
+                    key={item.hash + i}
                     activeOpacity={0.7}
-                    onPress={() => openTx(item)}
+                    onPress={() =>
+                      Linking.openURL(`https://sepolia.etherscan.io/tx/${item.hash}`)
+                    }
                     style={[
                       styles.itemRow,
                       {
                         borderBottomColor: colors.border,
                         borderBottomWidth:
-                          i < group.items.length - 1 ? 1 : 0,
+                          i < filteredTransfers.length - 1 ? 1 : 0,
                       },
                     ]}
                   >
@@ -331,17 +224,19 @@ export default function ActivityTab() {
                       style={[
                         styles.itemAvatar,
                         {
-                          backgroundColor: `hsl(${item.hue}, 30%, 88%)`,
+                          backgroundColor: isIncoming
+                            ? 'rgba(29, 181, 99, 0.12)'
+                            : 'rgba(239, 68, 68, 0.12)',
                         },
                       ]}
                     >
                       <Text
                         style={[
                           styles.itemAvatarText,
-                          { color: `hsl(${item.hue}, 45%, 28%)` },
+                          { color: isIncoming ? '#1DB563' : '#EF4444' },
                         ]}
                       >
-                        {item.initials}
+                        {isIncoming ? '↓' : '↑'}
                       </Text>
                     </View>
 
@@ -350,30 +245,31 @@ export default function ActivityTab() {
                         numberOfLines={1}
                         style={[styles.itemName, { color: colors.fg }]}
                       >
-                        {item.name}
+                        {isIncoming ? `From: ${shortAddr}` : `To: ${shortAddr}`}
                       </Text>
                       <View style={styles.itemMetaRow}>
                         <Text
                           numberOfLines={1}
-                          style={[styles.itemNote, { color: colors.fg2 }]}>
-                          {item.note}
+                          style={[styles.itemNote, { color: colors.fg2 }]}
+                        >
+                          Block #{parseInt(item.blockNum, 16)}
                         </Text>
                         <View
                           style={[
                             styles.catBadge,
                             {
-                              backgroundColor: catStyle.bg,
-                              borderColor: catStyle.border,
+                              backgroundColor: 'rgba(29, 93, 58, 0.10)',
+                              borderColor: 'rgba(29, 93, 58, 0.22)',
                             },
                           ]}
                         >
                           <Text
                             style={[
                               styles.catBadgeText,
-                              { color: catStyle.color },
+                              { color: '#1D5D3A' },
                             ]}
                           >
-                            {item.category}
+                            {item.category.toUpperCase()}
                           </Text>
                         </View>
                       </View>
@@ -383,21 +279,42 @@ export default function ActivityTab() {
                       <Text
                         style={[
                           styles.amountText,
-                          { color: item.pos ? '#1DB563' : colors.fg },
+                          { color: isIncoming ? '#1DB563' : colors.fg },
                         ]}
                       >
-                        {item.amount}
+                        {isIncoming ? '+' : '-'}
+                        {item.value.toFixed(4)} {item.asset}
                       </Text>
                       <Text style={[styles.itemTime, { color: colors.fg3 }]}>
-                        {item.time} ↗
+                        Verified ↗
                       </Text>
                     </View>
                   </TouchableOpacity>
                 )
-              })}
-            </View>
+              })
+            ) : (
+              <View style={styles.emptyContainer}>
+                <Text style={[styles.emptyTitle, { color: colors.fg }]}>
+                  No Transactions Found
+                </Text>
+                <Text style={[styles.emptySubtitle, { color: colors.fg3 }]}>
+                  No onchain transactions recorded for this wallet address yet.
+                </Text>
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() =>
+                    Linking.openURL(`https://sepolia.etherscan.io/address/${rawAddress}`)
+                  }
+                  style={[styles.verifyAddressBtn, { borderColor: colors.border }]}
+                >
+                  <Text style={[styles.verifyAddressBtnText, { color: colors.accent }]}>
+                    View Address on Etherscan ↗
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
-        ))}
+        </View>
       </View>
 
       {/* ── Testnet Verification Link at Bottom ── */}
@@ -410,7 +327,7 @@ export default function ActivityTab() {
       >
         <EthDiamond size={13} color="#1D5D3A" />
         <Text style={[styles.bottomVerifyText, { color: colors.fg3 }]}>
-          Ethereum Sepolia Testnet ·{' '}
+          Ethereum Network ·{' '}
           <Text style={{ color: '#1D5D3A', fontWeight: '700' }}>
             Verify All Activity on Etherscan ↗
           </Text>
@@ -440,34 +357,34 @@ const styles = StyleSheet.create({
   },
   summaryRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 8,
     marginBottom: 18,
   },
   summaryCard: {
     flex: 1,
-    padding: 14,
-    borderRadius: 20,
+    padding: 12,
+    borderRadius: 18,
     borderWidth: 1,
   },
   summaryLabel: {
     fontSize: 10,
     fontWeight: '800',
     textTransform: 'uppercase',
-    letterSpacing: 1.2,
+    letterSpacing: 0.5,
     marginBottom: 4,
   },
   summaryValue: {
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: '900',
   },
   filterScroll: {
     gap: 8,
-    paddingBottom: 4,
+    paddingTop: 4,
   },
   filterPill: {
     paddingHorizontal: 14,
     paddingVertical: 7,
-    borderRadius: 20,
+    borderRadius: 14,
     borderWidth: 1,
   },
   filterPillText: {
@@ -475,21 +392,31 @@ const styles = StyleSheet.create({
   },
   groupContainer: {
     paddingHorizontal: 24,
-    gap: 20,
   },
   groupBlock: {
-    gap: 8,
+    marginBottom: 20,
   },
   groupLabel: {
     fontSize: 10,
     fontWeight: '900',
-    letterSpacing: 1.4,
+    letterSpacing: 1.8,
     textTransform: 'uppercase',
+    marginBottom: 10,
   },
   groupCard: {
     borderRadius: 20,
     borderWidth: 1,
     overflow: 'hidden',
+  },
+  loadingBox: {
+    padding: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  loadingText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   itemRow: {
     flexDirection: 'row',
@@ -506,7 +433,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   itemAvatarText: {
-    fontSize: 11,
+    fontSize: 14,
     fontWeight: '900',
   },
   itemInfo: {
@@ -519,16 +446,15 @@ const styles = StyleSheet.create({
   itemMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginTop: 2,
+    gap: 8,
+    marginTop: 3,
   },
   itemNote: {
     fontSize: 11,
-    flexShrink: 1,
   },
   catBadge: {
     paddingHorizontal: 6,
-    paddingVertical: 1,
+    paddingVertical: 2,
     borderRadius: 6,
     borderWidth: 1,
   },
@@ -547,7 +473,35 @@ const styles = StyleSheet.create({
   },
   itemTime: {
     fontSize: 10,
+    fontWeight: '600',
     marginTop: 2,
+  },
+  emptyContainer: {
+    padding: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  emptyTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  emptySubtitle: {
+    fontSize: 11,
+    textAlign: 'center',
+    lineHeight: 16,
+    maxWidth: 260,
+  },
+  verifyAddressBtn: {
+    marginTop: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  verifyAddressBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
   },
   bottomVerifyLink: {
     flexDirection: 'row',
@@ -556,7 +510,7 @@ const styles = StyleSheet.create({
     gap: 7,
     paddingVertical: 12,
     paddingHorizontal: 16,
-    marginTop: 24,
+    marginTop: 10,
     marginHorizontal: 24,
     borderRadius: 16,
     borderWidth: 1,
