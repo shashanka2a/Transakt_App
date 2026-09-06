@@ -11,7 +11,7 @@ import {
   Linking,
   Platform,
 } from 'react-native'
-import Svg, { Path, Rect, Circle } from 'react-native-svg'
+import Svg, { Path } from 'react-native-svg'
 import { useTheme } from '../ThemeContext'
 import { useAuth } from '../AuthContext'
 import { IconCheck, IconX, EthDiamond } from '../components/Icons'
@@ -51,7 +51,10 @@ export default function ENSSearchScreen({ onPurchase }: Props) {
   const [liveBalance, setLiveBalance] = useState<number | null>(null)
   const [isRefreshingBal, setIsRefreshingBal] = useState(false)
   const [isFunding, setIsFunding] = useState(false)
-  const [fundedTxHash, setFundedTxHash] = useState<string | null>(null)
+  const [grantSuccessMsg, setGrantSuccessMsg] = useState<string | null>(null)
+
+  // Faucet Popup Modal State
+  const [showFaucetModal, setShowFaucetModal] = useState(false)
 
   // Registration Execution States
   const [showTxModal, setShowTxModal] = useState(false)
@@ -139,12 +142,13 @@ export default function ENSSearchScreen({ onPurchase }: Props) {
   const handleFundWallet = async () => {
     if (isFunding) return
     setIsFunding(true)
+    setGrantSuccessMsg(null)
     try {
       const grant = await claimInAppGasGrant(rawAddress)
       if (grant.success) {
         setLiveBalance((prev) => (prev !== null ? prev + grant.amountEth : grant.amountEth))
-        setFundedTxHash(grant.txHash)
-        setTimeout(() => setFundedTxHash(null), 10000)
+        setGrantSuccessMsg('🎉 Granted +0.05 Sepolia ETH! Ready for immediate testing.')
+        setTimeout(() => setGrantSuccessMsg(null), 8000)
       }
     } catch (err) {
       console.warn('Funding failed:', err)
@@ -209,55 +213,18 @@ export default function ENSSearchScreen({ onPurchase }: Props) {
             <Text style={styles.stepBadgeText}>Free ENS Onboarding</Text>
           </View>
 
-          <View style={styles.accountPillsRow}>
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={handleCopyAddress}
-              style={[styles.accountPill, { backgroundColor: colors.surface, borderColor: colors.border }]}
-            >
-              <Text style={[styles.accountPillText, { color: colors.fg2 }]}>
-                {copied
-                  ? '✓ Copied'
-                  : `${liveBalance !== null ? `${liveBalance.toFixed(3)} ETH · ` : ''}${shortAddress}`}
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              activeOpacity={0.75}
-              disabled={isFunding}
-              onPress={handleFundWallet}
-              style={[
-                styles.fundPill,
-                {
-                  backgroundColor: 'rgba(29, 93, 58, 0.12)',
-                  borderColor: 'rgba(29, 93, 58, 0.3)',
-                },
-              ]}
-            >
-              {isFunding ? (
-                <ActivityIndicator size="small" color="#1D5D3A" />
-              ) : (
-                <Text style={styles.fundPillText}>+0.05 Faucet</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Funded success notification */}
-        {fundedTxHash && (
           <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => Linking.openURL(`https://sepolia.etherscan.io/tx/${fundedTxHash}`)}
-            style={styles.fundedBanner}
+            activeOpacity={0.7}
+            onPress={() => setShowFaucetModal(true)}
+            style={[styles.accountPill, { backgroundColor: colors.surface, borderColor: colors.border }]}
           >
-            <Text style={styles.fundedBannerText}>
-              ✓ Funded +0.05 Sepolia ETH ·{' '}
-              <Text style={{ textDecorationLine: 'underline', fontWeight: '800' }}>
-                Verify Tx ↗
-              </Text>
+            <EthDiamond size={11} color="#1D5D3A" />
+            <Text style={[styles.accountPillText, { color: colors.fg2 }]}>
+              {liveBalance !== null ? `${liveBalance.toFixed(3)} ETH` : '0.000 ETH'} · {shortAddress}
             </Text>
+            <Text style={styles.faucetIndicatorTag}>Faucet</Text>
           </TouchableOpacity>
-        )}
+        </View>
 
         <Text style={[styles.title, { color: colors.fg }]}>
           Choose your family handle.
@@ -273,6 +240,43 @@ export default function ENSSearchScreen({ onPurchase }: Props) {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
+        {/* ── Prominent Faucet Banner Card ── */}
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={() => setShowFaucetModal(true)}
+          style={[
+            styles.faucetBannerCard,
+            {
+              backgroundColor: 'rgba(29, 93, 58, 0.08)',
+              borderColor: 'rgba(29, 93, 58, 0.25)',
+            },
+          ]}
+        >
+          <View style={styles.faucetBannerLeft}>
+            <View style={styles.faucetIconCircle}>
+              <EthDiamond size={18} color="#1D5D3A" />
+            </View>
+            <View style={styles.faucetBannerTexts}>
+              <View style={styles.faucetBannerTitleRow}>
+                <Text style={[styles.faucetBannerTitle, { color: colors.fg }]}>
+                  Sepolia Testnet Faucet & Gas
+                </Text>
+                <View style={styles.freeMiniBadge}>
+                  <Text style={styles.freeMiniBadgeText}>FREE</Text>
+                </View>
+              </View>
+              <Text style={[styles.faucetBannerSubtitle, { color: colors.fg3 }]}>
+                {liveBalance !== null && liveBalance > 0
+                  ? `Wallet balance: ${liveBalance.toFixed(4)} ETH · Zero gas needed`
+                  : 'Zero ETH needed · Tap to claim grant or view faucets'}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.faucetActionPill}>
+            <Text style={styles.faucetActionPillText}>Faucet ↗</Text>
+          </View>
+        </TouchableOpacity>
+
         {/* ── Search Input ── */}
         <View
           style={[
@@ -440,6 +444,222 @@ export default function ENSSearchScreen({ onPurchase }: Props) {
         </View>
       )}
 
+      {/* ── Faucet & Gas Grant Popup Modal ── */}
+      <Modal
+        visible={showFaucetModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowFaucetModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View
+            style={[
+              styles.faucetModalCard,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            {/* Modal Header */}
+            <View style={styles.faucetModalHeader}>
+              <View style={styles.faucetModalHeaderLeft}>
+                <View style={styles.faucetModalIconCircle}>
+                  <EthDiamond size={18} color="#1D5D3A" />
+                </View>
+                <View>
+                  <Text style={[styles.faucetModalTitle, { color: colors.fg }]}>
+                    Sepolia Testnet Faucet
+                  </Text>
+                  <Text style={[styles.faucetModalSubtitle, { color: colors.fg3 }]}>
+                    Fund your Transakt Smart Account
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowFaucetModal(false)}
+                style={[styles.closeIconBtn, { backgroundColor: colors.bg }]}
+              >
+                <IconX size={14} color={colors.fg2} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Wallet Address & Live Balance Box */}
+            <View
+              style={[
+                styles.faucetAccountBox,
+                { backgroundColor: colors.bg, borderColor: colors.border },
+              ]}
+            >
+              <View style={styles.faucetAccountRow}>
+                <View style={{ flex: 1, paddingRight: 8 }}>
+                  <Text style={[styles.faucetAccountLabel, { color: colors.fg3 }]}>
+                    Your Sepolia Address
+                  </Text>
+                  <Text
+                    style={[styles.faucetAddressText, { color: colors.fg }]}
+                    numberOfLines={1}
+                    ellipsizeMode="middle"
+                  >
+                    {rawAddress}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={handleCopyAddress}
+                  style={[
+                    styles.copyPillBtn,
+                    { backgroundColor: copied ? '#1D5D3A' : 'rgba(29, 93, 58, 0.12)' },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.copyPillText,
+                      { color: copied ? '#F5F3EB' : '#1D5D3A' },
+                    ]}
+                  >
+                    {copied ? '✓ Copied' : 'Copy'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={[styles.faucetDivider, { backgroundColor: colors.border }]} />
+
+              <View style={styles.faucetBalanceRow}>
+                <View>
+                  <Text style={[styles.faucetAccountLabel, { color: colors.fg3 }]}>
+                    Live Onchain Balance
+                  </Text>
+                  <Text style={[styles.faucetBalanceBig, { color: colors.fg }]}>
+                    {liveBalance !== null ? `${liveBalance.toFixed(4)} ETH` : '0.0000 ETH'}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  disabled={isRefreshingBal}
+                  onPress={async () => {
+                    setIsRefreshingBal(true)
+                    const bal = await getSepoliaBalance(rawAddress)
+                    setLiveBalance(bal)
+                    setIsRefreshingBal(false)
+                  }}
+                  style={styles.refreshBalBtn}
+                >
+                  {isRefreshingBal ? (
+                    <ActivityIndicator size="small" color="#1D5D3A" />
+                  ) : (
+                    <Text style={styles.refreshBalText}>↻ Check</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Grant success alert */}
+            {grantSuccessMsg && (
+              <View style={styles.grantSuccessBanner}>
+                <Text style={styles.grantSuccessBannerText}>{grantSuccessMsg}</Text>
+              </View>
+            )}
+
+            {/* Section 1: In-App Instant Gas Sponsorship */}
+            <View
+              style={[
+                styles.grantCard,
+                {
+                  backgroundColor: 'rgba(29, 93, 58, 0.06)',
+                  borderColor: 'rgba(29, 93, 58, 0.22)',
+                },
+              ]}
+            >
+              <View style={styles.grantHeader}>
+                <Text style={styles.grantTitle}>⚡ Instant In-App Gas Grant</Text>
+                <View style={styles.grantBadge}>
+                  <Text style={styles.grantBadgeText}>ZERO FEES</Text>
+                </View>
+              </View>
+              <Text style={[styles.grantDesc, { color: colors.fg3 }]}>
+                Transakt Smart Accounts include native gas sponsorship for all ENS registrations and vault actions.
+              </Text>
+
+              <TouchableOpacity
+                activeOpacity={0.8}
+                disabled={isFunding}
+                onPress={handleFundWallet}
+                style={styles.claimGrantBtn}
+              >
+                {isFunding ? (
+                  <ActivityIndicator size="small" color="#F5F3EB" />
+                ) : (
+                  <Text style={styles.claimGrantBtnText}>
+                    Claim +0.05 Sepolia Gas Grant
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+
+            {/* Section 2: Official Public Faucets */}
+            <View style={styles.externalFaucetsBlock}>
+              <Text style={[styles.externalFaucetsTitle, { color: colors.fg3 }]}>
+                Official Web3 Faucets (Real Onchain ETH)
+              </Text>
+              <Text style={[styles.externalFaucetsSubtitle, { color: colors.fg3 }]}>
+                Address auto-copies when tapping any faucet below:
+              </Text>
+
+              <View style={styles.faucetsGrid}>
+                {[
+                  {
+                    name: 'Google Cloud Web3 Faucet',
+                    url: 'https://cloud.google.com/application/web3/faucet/ethereum/sepolia',
+                  },
+                  {
+                    name: 'Sepolia PoW Faucet',
+                    url: 'https://sepolia-faucet.pk910.de/',
+                  },
+                  {
+                    name: 'Chainlink Faucet',
+                    url: 'https://faucets.chain.link/sepolia',
+                  },
+                  {
+                    name: 'SepoliaFaucet.com',
+                    url: 'https://sepoliafaucet.com/',
+                  },
+                ].map((f) => (
+                  <TouchableOpacity
+                    key={f.name}
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      handleCopyAddress()
+                      Linking.openURL(f.url)
+                    }}
+                    style={[
+                      styles.faucetChip,
+                      { backgroundColor: colors.bg, borderColor: colors.border },
+                    ]}
+                  >
+                    <Text style={[styles.faucetChipText, { color: colors.fg }]}>
+                      {f.name} ↗
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Etherscan Verification Link */}
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => Linking.openURL(`https://sepolia.etherscan.io/address/${rawAddress}`)}
+              style={styles.etherscanAddressBtn}
+            >
+              <Text style={[styles.etherscanAddressText, { color: colors.fg3 }]}>
+                Verify wallet on{' '}
+                <Text style={{ color: '#1D5D3A', fontWeight: '800' }}>
+                  Sepolia Etherscan ↗
+                </Text>
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* ── Registration Progress Modal ── */}
       <Modal visible={showTxModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
@@ -515,41 +735,39 @@ export default function ENSSearchScreen({ onPurchase }: Props) {
               })}
             </View>
 
-            {/* Verification Links (ETH Sepolia Testnet & ENS Portal) */}
-            {txResult.txHash && (
-              <View style={styles.modalLinksContainer}>
+            {/* Verification Links */}
+            <View style={styles.modalLinksContainer}>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => Linking.openURL(`https://sepolia.etherscan.io/address/${rawAddress}`)}
+                style={styles.txVerifyButton}
+              >
+                <Svg width={13} height={13} viewBox="0 0 24 24" fill="none">
+                  <Path
+                    d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"
+                    stroke="#1D5D3A"
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </Svg>
+                <Text style={styles.txVerifyButtonText}>
+                  Verify Wallet on Sepolia Etherscan ↗
+                </Text>
+              </TouchableOpacity>
+
+              {txResult.explorerUrl && (
                 <TouchableOpacity
                   activeOpacity={0.7}
-                  onPress={() => Linking.openURL(`https://sepolia.etherscan.io/tx/${txResult.txHash}`)}
-                  style={styles.txVerifyButton}
+                  onPress={() => Linking.openURL(txResult.explorerUrl!)}
+                  style={styles.explorerBtn}
                 >
-                  <Svg width={13} height={13} viewBox="0 0 24 24" fill="none">
-                    <Path
-                      d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"
-                      stroke="#1D5D3A"
-                      strokeWidth={2}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </Svg>
-                  <Text style={styles.txVerifyButtonText}>
-                    Verify ETH Sepolia Testnet Transaction ↗
+                  <Text style={styles.explorerBtnText}>
+                    View on Hackathon ENSv2 Portal ↗
                   </Text>
                 </TouchableOpacity>
-
-                {txResult.explorerUrl && (
-                  <TouchableOpacity
-                    activeOpacity={0.7}
-                    onPress={() => Linking.openURL(txResult.explorerUrl!)}
-                    style={styles.explorerBtn}
-                  >
-                    <Text style={styles.explorerBtnText}>
-                      View on Hackathon ENSv2 Explorer ↗
-                    </Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            )}
+              )}
+            </View>
 
             {/* Final CTA */}
             {txProgress.stage === 'confirmed' && (
@@ -606,12 +824,10 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#1D5D3A',
   },
-  accountPillsRow: {
+  accountPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-  },
-  accountPill: {
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
@@ -621,34 +837,15 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
   },
-  fundPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fundPillText: {
-    fontSize: 10,
-    fontWeight: '800',
+  faucetIndicatorTag: {
+    fontSize: 9,
+    fontWeight: '900',
     color: '#1D5D3A',
-  },
-  fundedBanner: {
-    backgroundColor: 'rgba(29, 93, 58, 0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(29, 93, 58, 0.25)',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginVertical: 4,
-  },
-  fundedBannerText: {
-    color: '#1D5D3A',
-    fontSize: 11,
-    fontWeight: '700',
+    backgroundColor: 'rgba(29, 93, 58, 0.15)',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 6,
+    textTransform: 'uppercase',
   },
   title: {
     fontSize: 26,
@@ -666,6 +863,67 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 100,
     gap: 14,
+  },
+  faucetBannerCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 12,
+    borderRadius: 18,
+    borderWidth: 1,
+  },
+  faucetBannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  faucetIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(29, 93, 58, 0.14)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  faucetBannerTexts: {
+    flex: 1,
+  },
+  faucetBannerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  faucetBannerTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  freeMiniBadge: {
+    backgroundColor: '#1D5D3A',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 5,
+  },
+  freeMiniBadgeText: {
+    color: '#F5F3EB',
+    fontSize: 8,
+    fontWeight: '900',
+  },
+  faucetBannerSubtitle: {
+    fontSize: 11,
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  faucetActionPill: {
+    backgroundColor: '#1D5D3A',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  faucetActionPillText: {
+    color: '#F5F3EB',
+    fontSize: 11,
+    fontWeight: '800',
   },
   searchRow: {
     flexDirection: 'row',
@@ -795,10 +1053,202 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    backgroundColor: 'rgba(0, 0, 0, 0.68)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 24,
+    padding: 20,
+  },
+  faucetModalCard: {
+    width: '100%',
+    maxWidth: 380,
+    borderRadius: 24,
+    borderWidth: 1,
+    padding: 20,
+    gap: 14,
+  },
+  faucetModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  faucetModalHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  faucetModalIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(29, 93, 58, 0.14)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  faucetModalTitle: {
+    fontSize: 17,
+    fontWeight: '900',
+  },
+  faucetModalSubtitle: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  closeIconBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  faucetAccountBox: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 12,
+    gap: 10,
+  },
+  faucetAccountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  faucetAccountLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  faucetAddressText: {
+    fontSize: 12,
+    fontWeight: '700',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    marginTop: 2,
+  },
+  copyPillBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
+  },
+  copyPillText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  faucetDivider: {
+    height: 1,
+    width: '100%',
+  },
+  faucetBalanceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  faucetBalanceBig: {
+    fontSize: 18,
+    fontWeight: '900',
+    marginTop: 2,
+  },
+  refreshBalBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: 'rgba(29, 93, 58, 0.1)',
+  },
+  refreshBalText: {
+    color: '#1D5D3A',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  grantSuccessBanner: {
+    backgroundColor: 'rgba(29, 93, 58, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(29, 93, 58, 0.3)',
+    borderRadius: 10,
+    padding: 8,
+    alignItems: 'center',
+  },
+  grantSuccessBannerText: {
+    color: '#1D5D3A',
+    fontSize: 11,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  grantCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 14,
+    gap: 6,
+  },
+  grantHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  grantTitle: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#1D5D3A',
+  },
+  grantBadge: {
+    backgroundColor: '#1D5D3A',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  grantBadgeText: {
+    color: '#F5F3EB',
+    fontSize: 8,
+    fontWeight: '900',
+  },
+  grantDesc: {
+    fontSize: 11,
+    lineHeight: 15,
+  },
+  claimGrantBtn: {
+    backgroundColor: '#1D5D3A',
+    borderRadius: 14,
+    height: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 4,
+  },
+  claimGrantBtnText: {
+    color: '#F5F3EB',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  externalFaucetsBlock: {
+    gap: 6,
+  },
+  externalFaucetsTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
+  externalFaucetsSubtitle: {
+    fontSize: 11,
+  },
+  faucetsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 2,
+  },
+  faucetChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  faucetChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  etherscanAddressBtn: {
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  etherscanAddressText: {
+    fontSize: 11,
+    fontWeight: '600',
   },
   modalCard: {
     width: '100%',

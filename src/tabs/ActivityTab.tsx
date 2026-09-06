@@ -201,9 +201,8 @@ export default function ActivityTab() {
     }
   }
 
-  const openTx = (item: ActivityItem) => {
-    const hash = item.txHash || '0x3a4b92c104db2d9b387799147d3bef32a606ea38991204859aefd123b091f82e'
-    Linking.openURL(`https://sepolia.etherscan.io/tx/${hash}`)
+  const openTx = (_item: ActivityItem) => {
+    Linking.openURL(`https://sepolia.etherscan.io/address/${rawAddress}`)
   }
 
   return (

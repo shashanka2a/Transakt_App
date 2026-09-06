@@ -43,6 +43,8 @@ const AuthContext = createContext<AuthContextType>({
   privyAppId: DEFAULT_PRIVY_APP_ID,
 })
 
+import { isValidEthereumAddress } from './services/alchemyFaucetService'
+
 // Deterministic smart account address generator for realistic fallback
 function generateSmartAccountAddress(seed: string): string {
   let hash1 = 0
@@ -156,10 +158,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error(errJson?.error || 'Invalid verification code.')
       }
 
-      const data = await res.json()
-      const userId = data?.user?.id || `usr_${Date.now()}`
-      const smartAddress = data?.user?.wallet?.address || generateSmartAccountAddress(email)
+      const data = await res.json().catch(() => ({}))
+      const rawPrivyAddr = data?.user?.wallet?.address
+      const smartAddress =
+        rawPrivyAddr && isValidEthereumAddress(rawPrivyAddr)
+          ? rawPrivyAddr
+          : generateSmartAccountAddress(email)
 
+      const userId = data?.user?.id || `privy_${Math.random().toString(36).substring(2, 9)}`
       const session: UserSession = {
         id: userId,
         email,
