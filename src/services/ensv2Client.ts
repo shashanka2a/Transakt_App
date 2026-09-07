@@ -13,23 +13,12 @@ export const ENSV2_HACKATHON_CONFIG = {
   explorerUrl: 'https://hackathon-deployment-portal-app.ens-cf.workers.dev/',
   defaultRpcUrl:
     process.env.EXPO_PUBLIC_SEPOLIA_RPC_URL ||
-    'https://ethereum-sepolia-rpc.publicnode.com',
+    'https://eth-sepolia.g.alchemy.com/v2/alch_MLfccmm0R5vlTvvshnekM',
 }
 
-// Sepolia chain with the official Hackathon Universal Resolver overwrite
-export const hackathonSepolia = {
-  ...sepolia,
-  contracts: {
-    ...sepolia.contracts,
-    ensUniversalResolver: {
-      address: ENSV2_HACKATHON_CONFIG.universalResolverAddress,
-    },
-  },
-} as const
-
-// Public Client instance targeting ENSv2 Beta on Sepolia
+// Public Client instance targeting standard Sepolia ENS resolution
 export const ensClient = createPublicClient({
-  chain: hackathonSepolia,
+  chain: sepolia,
   transport: http(ENSV2_HACKATHON_CONFIG.defaultRpcUrl),
 })
 

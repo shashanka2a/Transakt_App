@@ -319,7 +319,7 @@ export default function ENSSearchScreen({ onPurchase }: Props) {
           <Text style={[styles.verifyLinkText, { color: colors.fg3 }]}>
             Ethereum Network ·{' '}
             <Text style={{ color: '#1D5D3A', fontWeight: '700' }}>
-              Verify Address on Etherscan ↗
+              Verify on Etherscan ↗
             </Text>
           </Text>
         </TouchableOpacity>

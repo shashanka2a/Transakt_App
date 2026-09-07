@@ -375,7 +375,7 @@ export default function ENSDashboardScreen({ onEnterApp }: Props) {
             <Text style={[styles.bottomVerifyText, { color: colors.fg3 }]}>
               Ethereum Network ·{' '}
               <Text style={{ color: '#1D5D3A', fontWeight: '700' }}>
-                Verify Onchain Activity on Etherscan ↗
+                Verify on Etherscan ↗
               </Text>
             </Text>
           </TouchableOpacity>

@@ -446,7 +446,7 @@ export default function HomeTab({
           <Text style={[styles.bottomVerifyText, { color: colors.fg3 }]}>
             Ethereum Network ·{' '}
             <Text style={{ color: '#1D5D3A', fontWeight: '700' }}>
-              Verify Transactions on Etherscan ↗
+              Verify on Etherscan ↗
             </Text>
           </Text>
         </TouchableOpacity>
