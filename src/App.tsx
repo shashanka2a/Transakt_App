@@ -40,6 +40,12 @@ function AppShell() {
   const [flow, setFlow] = useState<AppFlow>('loading')
   const [activeTab, setActiveTab] = useState<Tab>('home')
   const [showBio, setShowBio] = useState(false)
+  const [bioData, setBioData] = useState<{
+    actionType: 'transfer' | 'policy' | 'subname' | 'auth'
+    amount?: string
+    recipient?: string
+    policyDetails?: string
+  }>({ actionType: 'transfer', amount: '$50.00', recipient: 'alex.smithfam.eth' })
   const [showRequest, setShowRequest] = useState(false)
   const [showSwap, setShowSwap] = useState(false)
 
@@ -84,7 +90,14 @@ function AppShell() {
             )}
             {activeTab === 'send' && (
               <SendTab
-                onReview={() => setShowBio(true)}
+                onReview={(data) => {
+                  setBioData({
+                    actionType: 'transfer',
+                    amount: data.amount,
+                    recipient: data.recipient,
+                  })
+                  setShowBio(true)
+                }}
                 onBack={() => setActiveTab('home')}
               />
             )}
@@ -103,6 +116,10 @@ function AppShell() {
                 setShowBio(false)
                 setActiveTab('home')
               }}
+              actionType={bioData.actionType}
+              amount={bioData.amount}
+              recipient={bioData.recipient}
+              policyDetails={bioData.policyDetails}
             />
           )}
 

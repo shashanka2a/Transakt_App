@@ -30,7 +30,7 @@ const noteOptions = [
 ]
 
 interface Props {
-  onReview: () => void
+  onReview: (data: { amount: string; recipient: string }) => void
   onBack: () => void
 }
 
@@ -81,6 +81,15 @@ export default function SendTab({ onReview, onBack }: Props) {
 
   const numAmt = parseFloat(amount)
   const canSend = resolved && numAmt > 0
+
+  const handleSendPress = () => {
+    if (canSend) {
+      onReview({
+        amount: `$${amount}`,
+        recipient: query.trim() || 'alex.smithfam.eth',
+      })
+    }
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: colors.bg }]}>
@@ -350,7 +359,7 @@ export default function SendTab({ onReview, onBack }: Props) {
         <TouchableOpacity
           activeOpacity={0.85}
           disabled={!canSend}
-          onPress={canSend ? onReview : undefined}
+          onPress={canSend ? handleSendPress : undefined}
           style={[
             styles.reviewButton,
             {
@@ -365,7 +374,7 @@ export default function SendTab({ onReview, onBack }: Props) {
               { color: canSend ? colors.accentFg : colors.fg3 },
             ]}
           >
-            {canSend ? 'Review & Send' : 'Enter Amount'}
+            {canSend ? 'Verify Humanity & Send' : 'Enter Amount'}
           </Text>
         </TouchableOpacity>
       </ScrollView>

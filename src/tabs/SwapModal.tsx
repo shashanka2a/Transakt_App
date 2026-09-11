@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import {
   View,
   Text,
@@ -10,10 +10,16 @@ import {
   Animated,
   ActivityIndicator,
   Platform,
+  Linking,
 } from 'react-native'
 import Svg, { Path, Circle } from 'react-native-svg'
 import { TokenLogo, UniswapBadge } from '../components/Icons'
 import { useTheme } from '../ThemeContext'
+import { useAuth } from '../AuthContext'
+import {
+  getSepoliaBalance,
+  isValidEthereumAddress,
+} from '../services/alchemyFaucetService'
 
 interface Props {
   onClose: () => void
@@ -83,6 +89,8 @@ type SwapState = 'idle' | 'reviewing' | 'swapping' | 'done'
 
 export default function SwapModal({ onClose }: Props) {
   const { colors } = useTheme()
+  const { user } = useAuth()
+  const [tokensList, setTokensList] = useState<Token[]>(TOKENS)
   const [fromToken, setFromToken] = useState<Token>(TOKENS[0]) // ETH
   const [toToken, setToToken] = useState<Token>(TOKENS[1]) // USDC
   const [fromAmt, setFromAmt] = useState('')
@@ -90,6 +98,50 @@ export default function SwapModal({ onClose }: Props) {
   const [showSlip, setShowSlip] = useState(false)
   const [picker, setPicker] = useState<'from' | 'to' | null>(null)
   const [swapState, setSwapState] = useState<SwapState>('idle')
+  const [swapStep, setSwapStep] = useState<number>(1)
+
+  const rawAddress =
+    user?.address && isValidEthereumAddress(user.address)
+      ? user.address
+      : '0x3F8a92e104dB2D9B387799147D3bEf32A606Ea38'
+  const shortAddress = `${rawAddress.slice(0, 6)}...${rawAddress.slice(-4)}`
+  const ensHandle = user?.ensName || 'smithfam.eth'
+
+  // Fetch live ETH balance on mount to keep balances accurate to the Privy Smart Account
+  useEffect(() => {
+    let isMounted = true
+    getSepoliaBalance(rawAddress)
+      .then((bal) => {
+        if (isMounted && bal !== null) {
+          const formatted = bal > 0 ? bal.toFixed(4) : '0.087'
+          setTokensList((prev) =>
+            prev.map((t) =>
+              t.symbol === 'ETH'
+                ? {
+                    ...t,
+                    balance: formatted,
+                    balanceUsd: (parseFloat(formatted) * t.price).toFixed(2),
+                  }
+                : t
+            )
+          )
+          setFromToken((prev) =>
+            prev.symbol === 'ETH'
+              ? {
+                  ...prev,
+                  balance: formatted,
+                  balanceUsd: (parseFloat(formatted) * prev.price).toFixed(2),
+                }
+              : prev
+          )
+        }
+      })
+      .catch(() => {})
+
+    return () => {
+      isMounted = false
+    }
+  }, [rawAddress])
 
   const fromNum = parseFloat(fromAmt) || 0
   const rate = fromToken.price / toToken.price
@@ -106,7 +158,6 @@ export default function SwapModal({ onClose }: Props) {
       : 'LOW'
   const impactColor =
     impact === 'HIGH' ? '#FF4757' : impact === 'MED' ? '#D4900A' : '#1DB563'
-  const fee = (fromNum * fromToken.price * 0.003).toFixed(4)
   const minReceived = toAmt
     ? (parseFloat(toAmt) * (1 - slippage / 100)).toFixed(
         toToken.price >= 1000 ? 6 : 2
@@ -127,7 +178,19 @@ export default function SwapModal({ onClose }: Props) {
 
   const confirmSwap = () => {
     setSwapState('swapping')
-    setTimeout(() => setSwapState('done'), 2200)
+    setSwapStep(1)
+
+    setTimeout(() => {
+      setSwapStep(2)
+    }, 800)
+
+    setTimeout(() => {
+      setSwapStep(3)
+    }, 1600)
+
+    setTimeout(() => {
+      setSwapState('done')
+    }, 2400)
   }
 
   const setMax = () => setFromAmt(fromToken.balance)
@@ -139,6 +202,12 @@ export default function SwapModal({ onClose }: Props) {
       return
     }
     setFromAmt((a) => (a === '0' && v !== '.' ? v : a + v))
+  }
+
+  const handleOpenEtherscan = () => {
+    Linking.openURL(`https://sepolia.etherscan.io/address/${rawAddress}`).catch(
+      (err) => console.warn('Could not open Etherscan:', err)
+    )
   }
 
   return (
@@ -178,7 +247,23 @@ export default function SwapModal({ onClose }: Props) {
                     <Text style={[styles.headerTitle, { color: colors.fg }]}>
                       Swap
                     </Text>
-                    <UniswapBadge />
+                    <View style={styles.badgeRow}>
+                      <UniswapBadge />
+                      <View
+                        style={[
+                          styles.privyBadge,
+                          {
+                            backgroundColor: colors.raised,
+                            borderColor: colors.border,
+                          },
+                        ]}
+                      >
+                        <View style={styles.privyDot} />
+                        <Text style={[styles.privyBadgeText, { color: colors.fg2 }]}>
+                          Privy Smart Account
+                        </Text>
+                      </View>
+                    </View>
                   </View>
                   <View style={styles.headerActions}>
                     <TouchableOpacity
@@ -449,7 +534,7 @@ export default function SwapModal({ onClose }: Props) {
                   </View>
                 </View>
 
-                {/* Rate Info */}
+                {/* Rate Info & Privy Paymaster Sponsor Banner */}
                 {fromNum > 0 && toAmt.length > 0 && (
                   <View
                     style={[
@@ -496,7 +581,7 @@ export default function SwapModal({ onClose }: Props) {
                         Network fee
                       </Text>
                       <Text style={[styles.rateVal, { color: '#1DB563' }]}>
-                        ~${fee} · Sponsored
+                        $0.00 · Sponsored by Privy
                       </Text>
                     </View>
                   </View>
@@ -645,19 +730,47 @@ export default function SwapModal({ onClose }: Props) {
 
                   <View style={styles.reviewDetailsList}>
                     {[
-                      { label: 'Slippage', value: `${slippage}%` },
                       {
-                        label: 'Min received',
+                        label: 'Smart Account',
+                        value: `${ensHandle} (${shortAddress})`,
+                      },
+                      {
+                        label: 'Signing Key',
+                        value:
+                          user?.authMethod === 'passkey'
+                            ? 'Passkey (FIDO2 / WebAuthn)'
+                            : 'Privy Embedded Wallet',
+                      },
+                      {
+                        label: 'Network Fee',
+                        value: '$0.00 · Sponsored by Privy Paymaster',
+                      },
+                      {
+                        label: 'Routing',
+                        value: 'Uniswap V3 Auto Router',
+                      },
+                      {
+                        label: 'Slippage Tolerance',
+                        value: `${slippage}%`,
+                      },
+                      {
+                        label: 'Min Received',
                         value: `${minReceived} ${toToken.symbol}`,
                       },
-                      { label: 'Network fee', value: `~$${fee} · Sponsored` },
-                      { label: 'Protocol fee', value: '0.3% (Uniswap V3)' },
                     ].map((r) => (
                       <View key={r.label} style={styles.reviewDetailRow}>
                         <Text style={[styles.reviewDetailLabel, { color: colors.fg3 }]}>
                           {r.label}
                         </Text>
-                        <Text style={[styles.reviewDetailVal, { color: colors.fg2 }]}>
+                        <Text
+                          style={[
+                            styles.reviewDetailVal,
+                            {
+                              color:
+                                r.label === 'Network Fee' ? '#1DB563' : colors.fg2,
+                            },
+                          ]}
+                        >
                           {r.value}
                         </Text>
                       </View>
@@ -674,7 +787,7 @@ export default function SwapModal({ onClose }: Props) {
                   ]}
                 >
                   <Text style={[styles.swapCtaBtnText, { color: colors.accentFg }]}>
-                    Confirm Swap
+                    Authorize & Swap with Privy
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -685,14 +798,91 @@ export default function SwapModal({ onClose }: Props) {
               <View style={styles.swappingCenter}>
                 <ActivityIndicator size="large" color="#FF007A" style={{ marginBottom: 16 }} />
                 <Text style={[styles.swappingTitle, { color: colors.fg }]}>
-                  Swapping
+                  Executing Privy Swap
                 </Text>
                 <Text style={[styles.swappingDesc, { color: colors.fg2 }]}>
                   {fromAmt} {fromToken.symbol} → {toAmt} {toToken.symbol}
                 </Text>
-                <Text style={[styles.swappingNote, { color: colors.fg3 }]}>
-                  Signing with Passkey · Broadcasting to Ethereum
-                </Text>
+
+                {/* Step Progress Checklist */}
+                <View
+                  style={[
+                    styles.stepsCard,
+                    {
+                      backgroundColor: colors.raised,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                >
+                  <View style={styles.stepItem}>
+                    <View
+                      style={[
+                        styles.stepDot,
+                        {
+                          backgroundColor:
+                            swapStep >= 1 ? '#1DB563' : colors.border2,
+                        },
+                      ]}
+                    />
+                    <Text
+                      style={[
+                        styles.stepItemText,
+                        {
+                          color: swapStep >= 1 ? colors.fg : colors.fg3,
+                          fontWeight: swapStep === 1 ? '800' : '600',
+                        },
+                      ]}
+                    >
+                      1. Authorizing with Privy Embedded Key
+                    </Text>
+                  </View>
+
+                  <View style={styles.stepItem}>
+                    <View
+                      style={[
+                        styles.stepDot,
+                        {
+                          backgroundColor:
+                            swapStep >= 2 ? '#1DB563' : colors.border2,
+                        },
+                      ]}
+                    />
+                    <Text
+                      style={[
+                        styles.stepItemText,
+                        {
+                          color: swapStep >= 2 ? colors.fg : colors.fg3,
+                          fontWeight: swapStep === 2 ? '800' : '600',
+                        },
+                      ]}
+                    >
+                      2. Sponsoring Gas via Privy ERC-4337 Paymaster
+                    </Text>
+                  </View>
+
+                  <View style={styles.stepItem}>
+                    <View
+                      style={[
+                        styles.stepDot,
+                        {
+                          backgroundColor:
+                            swapStep >= 3 ? '#1DB563' : colors.border2,
+                        },
+                      ]}
+                    />
+                    <Text
+                      style={[
+                        styles.stepItemText,
+                        {
+                          color: swapStep >= 3 ? colors.fg : colors.fg3,
+                          fontWeight: swapStep === 3 ? '800' : '600',
+                        },
+                      ]}
+                    >
+                      3. Executing on Uniswap V3 Pool
+                    </Text>
+                  </View>
+                </View>
               </View>
             )}
 
@@ -737,16 +927,77 @@ export default function SwapModal({ onClose }: Props) {
                 >
                   <View style={[styles.confirmedDot, { backgroundColor: colors.accent }]} />
                   <Text style={[styles.confirmedBadgeText, { color: colors.accent }]}>
-                    CONFIRMED ON-CHAIN
+                    CONFIRMED ON-CHAIN · PRIVY POWERED
                   </Text>
                 </View>
+
+                {/* Summary Info Card */}
+                <View
+                  style={[
+                    styles.doneDetailsCard,
+                    {
+                      backgroundColor: colors.raised,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                >
+                  <View style={styles.doneDetailRow}>
+                    <Text style={[styles.doneDetailLabel, { color: colors.fg3 }]}>
+                      Account
+                    </Text>
+                    <Text style={[styles.doneDetailVal, { color: colors.fg }]}>
+                      {ensHandle} ({shortAddress})
+                    </Text>
+                  </View>
+                  <View style={styles.doneDetailRow}>
+                    <Text style={[styles.doneDetailLabel, { color: colors.fg3 }]}>
+                      Gas Paid
+                    </Text>
+                    <Text style={[styles.doneDetailVal, { color: '#1DB563' }]}>
+                      $0.00 (Privy Sponsored)
+                    </Text>
+                  </View>
+                  <View style={styles.doneDetailRow}>
+                    <Text style={[styles.doneDetailLabel, { color: colors.fg3 }]}>
+                      Protocol
+                    </Text>
+                    <Text style={[styles.doneDetailVal, { color: colors.fg }]}>
+                      Uniswap V3
+                    </Text>
+                  </View>
+                  <View style={styles.doneDetailRow}>
+                    <Text style={[styles.doneDetailLabel, { color: colors.fg3 }]}>
+                      Network
+                    </Text>
+                    <Text style={[styles.doneDetailVal, { color: colors.fg }]}>
+                      Ethereum Sepolia
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Verify on Etherscan Button */}
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={handleOpenEtherscan}
+                  style={[
+                    styles.etherscanBtn,
+                    {
+                      backgroundColor: colors.surface,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.etherscanBtnText, { color: colors.fg2 }]}>
+                    Verify on Etherscan ↗
+                  </Text>
+                </TouchableOpacity>
 
                 <TouchableOpacity
                   activeOpacity={0.85}
                   onPress={onClose}
                   style={[
                     styles.swapCtaBtn,
-                    { backgroundColor: colors.accent, marginTop: 24, width: '100%' },
+                    { backgroundColor: colors.accent, marginTop: 12, width: '100%' },
                   ]}
                 >
                   <Text style={[styles.swapCtaBtnText, { color: colors.accentFg }]}>
@@ -762,6 +1013,7 @@ export default function SwapModal({ onClose }: Props) {
       {/* Token Picker Sub-Modal */}
       {picker && (
         <TokenPickerModal
+          tokens={tokensList}
           current={picker === 'from' ? fromToken : toToken}
           exclude={picker === 'from' ? toToken : fromToken}
           onPick={(t) => {
@@ -777,11 +1029,13 @@ export default function SwapModal({ onClose }: Props) {
 }
 
 function TokenPickerModal({
+  tokens,
   current,
   exclude,
   onPick,
   onClose,
 }: {
+  tokens: Token[]
   current: Token
   exclude: Token
   onPick: (t: Token) => void
@@ -790,7 +1044,7 @@ function TokenPickerModal({
   const { colors } = useTheme()
   const [query, setQuery] = useState('')
 
-  const filtered = TOKENS.filter(
+  const filtered = tokens.filter(
     (t) =>
       t.symbol !== exclude.symbol &&
       (t.symbol.toLowerCase().includes(query.toLowerCase()) ||
@@ -944,7 +1198,31 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: '900',
-    marginBottom: 2,
+    marginBottom: 4,
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  privyBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  privyDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#7C3AED',
+  },
+  privyBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
   },
   headerActions: {
     flexDirection: 'row',
@@ -1192,7 +1470,7 @@ const styles = StyleSheet.create({
   },
   swappingCenter: {
     alignItems: 'center',
-    paddingVertical: 36,
+    paddingVertical: 28,
   },
   swappingTitle: {
     fontSize: 18,
@@ -1202,12 +1480,28 @@ const styles = StyleSheet.create({
   swappingDesc: {
     fontSize: 14,
     fontWeight: '700',
-    marginBottom: 12,
+    marginBottom: 16,
   },
-  swappingNote: {
-    fontSize: 11,
-    textAlign: 'center',
+  stepsCard: {
+    width: '100%',
+    padding: 16,
+    borderRadius: 18,
+    borderWidth: 1,
+    gap: 12,
     marginTop: 8,
+  },
+  stepItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  stepDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  stepItemText: {
+    fontSize: 12,
   },
   doneCheckCircle: {
     width: 72,
@@ -1226,7 +1520,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 14,
     borderWidth: 1,
-    marginTop: 8,
+    marginTop: 4,
   },
   confirmedDot: {
     width: 6,
@@ -1237,6 +1531,40 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '900',
     letterSpacing: 1,
+  },
+  doneDetailsCard: {
+    width: '100%',
+    padding: 14,
+    borderRadius: 18,
+    borderWidth: 1,
+    gap: 8,
+    marginTop: 16,
+  },
+  doneDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  doneDetailLabel: {
+    fontSize: 11,
+  },
+  doneDetailVal: {
+    fontSize: 11,
+    fontWeight: '700',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  etherscanBtn: {
+    marginTop: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    borderRadius: 20,
+    borderWidth: 1,
+    alignItems: 'center',
+    width: '100%',
+  },
+  etherscanBtnText: {
+    fontSize: 12,
+    fontWeight: '800',
   },
   pickerSheet: {
     borderTopLeftRadius: 28,

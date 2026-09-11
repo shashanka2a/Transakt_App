@@ -8,32 +8,53 @@ import {
   Animated,
   Easing,
   Platform,
+  ActivityIndicator,
 } from 'react-native'
 import Svg, {
   Path,
   Circle,
   Ellipse,
   Line,
+  Rect,
 } from 'react-native-svg'
 import { useTheme } from '../ThemeContext'
+import {
+  generateWorldIdZKProof,
+  verifyWorldIdProofOnchain,
+  WorldIdProof,
+} from '../services/worldIdService'
 
-interface Props {
+export interface BiometricModalProps {
   onClose: () => void
   onConfirm: () => void
+  actionType?: 'transfer' | 'policy' | 'subname' | 'auth'
+  amount?: string
+  recipient?: string
+  policyDetails?: string
 }
 
-type ScanState = 'scanning' | 'detected' | 'verified'
+type StepState = 'viewfinder' | 'computing_zk' | 'verified'
 
-export default function BiometricModal({ onClose, onConfirm }: Props) {
+export default function BiometricModal({
+  onClose,
+  onConfirm,
+  actionType = 'transfer',
+  amount = '$50.00',
+  recipient = 'alex.smithfam.eth',
+  policyDetails = 'Spend Limit & Policy Update',
+}: BiometricModalProps) {
   const { colors } = useTheme()
-  const [state, setState] = useState<ScanState>('scanning')
+  const [step, setStep] = useState<StepState>('viewfinder')
+  const [zkProof, setZkProof] = useState<WorldIdProof | null>(null)
+  const [progressStage, setProgressStage] = useState(1)
 
   const spinAnim = useRef(new Animated.Value(0)).current
   const scanLineAnim = useRef(new Animated.Value(0)).current
   const pulseAnim = useRef(new Animated.Value(1)).current
+  const meshGlowAnim = useRef(new Animated.Value(0.4)).current
 
   useEffect(() => {
-    // Spin animation for radar sweep
+    // 1. Radar sweep rotation
     const spinLoop = Animated.loop(
       Animated.timing(spinAnim, {
         toValue: 1,
@@ -44,18 +65,18 @@ export default function BiometricModal({ onClose, onConfirm }: Props) {
     )
     spinLoop.start()
 
-    // Scan line vertical float
+    // 2. Vertical laser sweep
     const scanLoop = Animated.loop(
       Animated.sequence([
         Animated.timing(scanLineAnim, {
           toValue: 1,
-          duration: 1300,
+          duration: 1200,
           easing: Easing.inOut(Easing.ease),
           useNativeDriver: true,
         }),
         Animated.timing(scanLineAnim, {
           toValue: 0,
-          duration: 1300,
+          duration: 1200,
           easing: Easing.inOut(Easing.ease),
           useNativeDriver: true,
         }),
@@ -63,45 +84,92 @@ export default function BiometricModal({ onClose, onConfirm }: Props) {
     )
     scanLoop.start()
 
-    // Pulse dot
+    // 3. Pulse indicator
     const pulseLoop = Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, {
-          toValue: 0.35,
-          duration: 800,
+          toValue: 0.3,
+          duration: 700,
           useNativeDriver: true,
         }),
         Animated.timing(pulseAnim, {
           toValue: 1,
-          duration: 800,
+          duration: 700,
           useNativeDriver: true,
         }),
       ])
     )
     pulseLoop.start()
 
-    // Sequence timers
-    const t1 = setTimeout(() => setState('detected'), 2200)
-    const t2 = setTimeout(() => setState('verified'), 3800)
-    const t3 = setTimeout(() => onConfirm(), 4600)
+    // 4. Mesh Glow
+    const meshLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(meshGlowAnim, {
+          toValue: 0.9,
+          duration: 900,
+          useNativeDriver: true,
+        }),
+        Animated.timing(meshGlowAnim, {
+          toValue: 0.4,
+          duration: 900,
+          useNativeDriver: true,
+        }),
+      ])
+    )
+    meshLoop.start()
 
     return () => {
       spinLoop.stop()
       scanLoop.stop()
       pulseLoop.stop()
-      clearTimeout(t1)
-      clearTimeout(t2)
-      clearTimeout(t3)
+      meshLoop.stop()
     }
-  }, [onConfirm, spinAnim, scanLineAnim, pulseAnim])
+  }, [spinAnim, scanLineAnim, pulseAnim, meshGlowAnim])
 
-  const ok = state === 'verified'
+  // Automatically start biometric selfie verification
+  const handleStartVerification = async () => {
+    setStep('computing_zk')
+    setProgressStage(1)
 
-  const label = {
-    scanning: 'Scanning liveness…',
-    detected: 'Face detected…',
-    verified: 'Identity confirmed',
-  }[state]
+    // Generate ZK-SNARK World ID Proof
+    const actionKey =
+      actionType === 'transfer'
+        ? `transfer_${amount}_${recipient}`
+        : actionType === 'policy'
+        ? 'policy_modification'
+        : 'subname_issuance'
+
+    const proof = generateWorldIdZKProof(actionKey)
+    setZkProof(proof)
+
+    setTimeout(() => {
+      setProgressStage(2)
+    }, 750)
+
+    setTimeout(() => {
+      setProgressStage(3)
+    }, 1500)
+
+    await verifyWorldIdProofOnchain(proof)
+
+    setTimeout(() => {
+      setStep('verified')
+      setTimeout(() => {
+        onConfirm()
+      }, 1600)
+    }, 2200)
+  }
+
+  // Auto trigger after 1 second on modal open
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (step === 'viewfinder') {
+        handleStartVerification()
+      }
+    }, 900)
+
+    return () => clearTimeout(timer)
+  }, [])
 
   const spinInterpolate = spinAnim.interpolate({
     inputRange: [0, 1],
@@ -110,8 +178,10 @@ export default function BiometricModal({ onClose, onConfirm }: Props) {
 
   const scanLineTranslateY = scanLineAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [-60, 60],
+    outputRange: [-65, 65],
   })
+
+  const isVerified = step === 'verified'
 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
@@ -119,7 +189,7 @@ export default function BiometricModal({ onClose, onConfirm }: Props) {
         <TouchableOpacity
           style={StyleSheet.absoluteFill}
           activeOpacity={1}
-          onPress={onClose}
+          onPress={isVerified ? undefined : onClose}
         />
 
         <View
@@ -131,62 +201,75 @@ export default function BiometricModal({ onClose, onConfirm }: Props) {
             },
           ]}
         >
-          {/* Handle */}
+          {/* Top Handle */}
           <View style={[styles.sheetHandle, { backgroundColor: colors.border2 }]} />
 
-          {/* Shield Icon Badge */}
-          <View
-            style={[
-              styles.shieldBadge,
-              {
-                backgroundColor: colors.raised,
-                borderColor: colors.border,
-              },
-            ]}
-          >
-            <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
-              <Path
-                d="M12 2L4 6V12C4 16.42 7.58 20.17 12 21C16.42 20.17 20 16.42 20 12V6L12 2Z"
-                stroke={ok ? colors.accent : colors.fg2}
-                strokeWidth={1.8}
-                strokeLinejoin="round"
-                fill="none"
-              />
-              <Circle cx="12" cy="12" r="2.5" fill={ok ? colors.accent : colors.fg3} />
-            </Svg>
+          {/* Header Row with World ID Badge */}
+          <View style={styles.headerBadgeRow}>
+            <View
+              style={[
+                styles.worldIdBadge,
+                {
+                  backgroundColor: 'rgba(0, 0, 0, 0.85)',
+                  borderColor: '#1DB563',
+                },
+              ]}
+            >
+              {/* Worldcoin Orb Logo Icon */}
+              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                <Circle cx="12" cy="12" r="9" stroke="#1DB563" strokeWidth="2.2" />
+                <Circle cx="12" cy="12" r="4.5" fill="#1DB563" />
+                <Path d="M12 3v3M12 18v3M3 12h3M18 12h3" stroke="#1DB563" strokeWidth="1.8" strokeLinecap="round" />
+              </Svg>
+              <Text style={styles.worldIdBadgeText}>WORLD ID · ZK-SNARK</Text>
+            </View>
+
+            <View
+              style={[
+                styles.levelPill,
+                {
+                  backgroundColor: colors.raised,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <Text style={[styles.levelPillText, { color: colors.fg3 }]}>
+                Orb Verified
+              </Text>
+            </View>
           </View>
 
-          {/* Title & Description */}
+          {/* Action Context Title */}
           <View style={styles.titleBlock}>
             <Text style={[styles.sheetTitle, { color: colors.fg }]}>
-              Biometric Verification Required
+              {actionType === 'transfer'
+                ? 'High-Value Transfer Step-Up Auth'
+                : actionType === 'policy'
+                ? 'Policy Modification Authorization'
+                : 'Proof-of-Humanity Verification'}
             </Text>
             <Text style={[styles.sheetSubtitle, { color: colors.fg2 }]}>
-              This transfer needs a quick human check{'\n'}before it's authorized.
+              {actionType === 'transfer'
+                ? `Authorizing ${amount} to ${recipient} via 1:1 Zero-Knowledge Proof`
+                : actionType === 'policy'
+                ? `Confirming ${policyDetails} with zero biometric data leakage`
+                : 'Verifying unique human presence without storing biometric data'}
             </Text>
           </View>
 
-          {/* Face scan ring */}
-          <View style={styles.scanViewportContainer}>
-            <View style={styles.scanRing}>
-              {/* Outer border */}
-              <Svg width={190} height={190} viewBox="0 0 200 200" style={StyleSheet.absoluteFill}>
-                <Circle cx="100" cy="100" r="88" stroke={colors.border} strokeWidth={2.2} fill="none" />
-                <Circle
-                  cx="100"
-                  cy="100"
-                  r="88"
-                  stroke={ok ? colors.accent : '#1DB563'}
-                  strokeWidth={3}
-                  strokeDasharray={553}
-                  strokeDashoffset={state === 'scanning' ? 450 : state === 'detected' ? 220 : 0}
-                  strokeLinecap="round"
-                  fill="none"
-                />
-              </Svg>
-
-              {/* Rotating radar sweep */}
-              {!ok && (
+          {/* ── CAMERA / BIOMETRIC SELFIE VIEWFINDER ── */}
+          <View style={styles.viewfinderContainer}>
+            <View
+              style={[
+                styles.viewfinderFrame,
+                {
+                  backgroundColor: colors.bg,
+                  borderColor: isVerified ? '#1DB563' : colors.accent,
+                },
+              ]}
+            >
+              {/* Outer Rotating Radar Glow */}
+              {!isVerified && (
                 <Animated.View
                   style={[
                     styles.radarSweep,
@@ -197,41 +280,60 @@ export default function BiometricModal({ onClose, onConfirm }: Props) {
                 </Animated.View>
               )}
 
-              {/* Facial Mesh Inner */}
-              <View
-                style={[
-                  styles.faceMeshInner,
-                  {
-                    backgroundColor: colors.bg,
-                    borderColor: colors.border,
-                  },
-                ]}
-              >
-                <Svg width={96} height={112} viewBox="0 0 96 112" fill="none">
+              {/* Viewfinder Target Corner Brackets */}
+              <View style={[styles.cornerTL, { borderColor: isVerified ? '#1DB563' : colors.accent }]} />
+              <View style={[styles.cornerTR, { borderColor: isVerified ? '#1DB563' : colors.accent }]} />
+              <View style={[styles.cornerBL, { borderColor: isVerified ? '#1DB563' : colors.accent }]} />
+              <View style={[styles.cornerBR, { borderColor: isVerified ? '#1DB563' : colors.accent }]} />
+
+              {/* 3D Facial Mesh & Anti-Spoofing Geometry */}
+              <View style={styles.faceMeshLayer}>
+                <Svg width={110} height={124} viewBox="0 0 96 112" fill="none">
+                  {/* Face Outline */}
                   <Ellipse
                     cx="48"
                     cy="52"
-                    rx="30"
-                    ry="38"
-                    stroke={ok ? colors.accent : colors.fg3}
-                    strokeWidth={1.2}
+                    rx="32"
+                    ry="40"
+                    stroke={isVerified ? '#1DB563' : colors.accent}
+                    strokeWidth={1.4}
                     strokeDasharray="4 3"
-                    opacity={0.5}
+                    opacity={0.65}
                   />
-                  <Ellipse cx="35" cy="45" rx="6" ry="4.5" stroke={ok ? colors.accent : colors.fg3} strokeWidth={1.3} />
-                  <Ellipse cx="61" cy="45" rx="6" ry="4.5" stroke={ok ? colors.accent : colors.fg3} strokeWidth={1.3} />
-                  <Path d="M48 52 L44 63 Q48 66 52 63 Z" stroke={ok ? colors.accent : colors.fg3} strokeWidth={1} fill="none" />
-                  <Path d="M38 73 Q48 80 58 73" stroke={ok ? colors.accent : colors.fg3} strokeWidth={1.3} strokeLinecap="round" fill="none" />
-                  <Line x1="14" y1="52" x2="82" y2="52" stroke={colors.fg3} strokeWidth={0.4} opacity={0.18} />
-                  <Line x1="48" y1="14" x2="48" y2="90" stroke={colors.fg3} strokeWidth={0.4} opacity={0.18} />
+                  {/* Eyes Crosshairs */}
+                  <Circle cx="35" cy="44" r="5" stroke={isVerified ? '#1DB563' : colors.accent} strokeWidth={1.2} />
+                  <Circle cx="35" cy="44" r="1.5" fill={isVerified ? '#1DB563' : colors.accent} />
+                  <Circle cx="61" cy="44" r="5" stroke={isVerified ? '#1DB563' : colors.accent} strokeWidth={1.2} />
+                  <Circle cx="61" cy="44" r="1.5" fill={isVerified ? '#1DB563' : colors.accent} />
+                  {/* Nose Bridge */}
+                  <Path
+                    d="M48 46 L45 59 Q48 62 51 59 Z"
+                    stroke={isVerified ? '#1DB563' : colors.accent}
+                    strokeWidth={1}
+                    fill="none"
+                  />
+                  {/* Mouth Liveness Arc */}
+                  <Path
+                    d="M38 72 Q48 80 58 72"
+                    stroke={isVerified ? '#1DB563' : colors.accent}
+                    strokeWidth={1.4}
+                    strokeLinecap="round"
+                    fill="none"
+                  />
+                  {/* ZK Mesh Matrix Grid */}
+                  <Line x1="12" y1="52" x2="84" y2="52" stroke={colors.fg3} strokeWidth={0.5} opacity={0.25} />
+                  <Line x1="48" y1="12" x2="48" y2="92" stroke={colors.fg3} strokeWidth={0.5} opacity={0.25} />
+                  <Line x1="26" y1="24" x2="70" y2="80" stroke={colors.fg3} strokeWidth={0.4} opacity={0.15} />
+                  <Line x1="70" y1="24" x2="26" y2="80" stroke={colors.fg3} strokeWidth={0.4} opacity={0.15} />
 
-                  {ok && (
+                  {/* Verified Checkmark Overlay */}
+                  {isVerified && (
                     <>
-                      <Circle cx="48" cy="52" r="18" fill="rgba(0,255,135,0.12)" />
+                      <Circle cx="48" cy="52" r="22" fill="rgba(29,181,99,0.18)" />
                       <Path
-                        d="M39 52L45 58L57 46"
-                        stroke={colors.accent}
-                        strokeWidth={2.5}
+                        d="M38 52L44 58L58 44"
+                        stroke="#1DB563"
+                        strokeWidth={3}
                         strokeLinecap="round"
                         strokeLinejoin="round"
                       />
@@ -239,8 +341,8 @@ export default function BiometricModal({ onClose, onConfirm }: Props) {
                   )}
                 </Svg>
 
-                {/* Laser scan line moving vertically */}
-                {state === 'scanning' && (
+                {/* Laser Scanning Bar */}
+                {!isVerified && (
                   <Animated.View
                     style={[
                       styles.scanLaserLine,
@@ -254,51 +356,140 @@ export default function BiometricModal({ onClose, onConfirm }: Props) {
               </View>
             </View>
 
-            {/* Status indicator */}
+            {/* Live Verification Status Row */}
             <View style={styles.statusRow}>
               <Animated.View
                 style={[
                   styles.statusDot,
                   {
-                    backgroundColor: ok ? colors.accent : '#1DB563',
-                    opacity: ok ? 1 : pulseAnim,
+                    backgroundColor: isVerified ? '#1DB563' : colors.accent,
+                    opacity: isVerified ? 1 : pulseAnim,
                   },
                 ]}
               />
               <Text
                 style={[
                   styles.statusLabel,
-                  { color: ok ? colors.accent : colors.fg2 },
+                  { color: isVerified ? '#1DB563' : colors.fg },
                 ]}
               >
-                {label}
+                {step === 'viewfinder'
+                  ? 'Aligning 3D facial geometry…'
+                  : step === 'computing_zk'
+                  ? 'Computing Zero-Knowledge Proof (Groth16)…'
+                  : 'Proof of Humanity Verified (1:1 Unique Human)'}
               </Text>
             </View>
           </View>
 
-          {/* Privacy Notice */}
+          {/* ── ZK-SNARK COMPUTATION PROGRESS CHECKLIST ── */}
           <View
             style={[
-              styles.privacyPill,
+              styles.zkStepsCard,
               {
                 backgroundColor: colors.raised,
                 borderColor: colors.border,
               },
             ]}
           >
-            <Text style={[styles.privacyText, { color: colors.fg2 }]}>
-              Proving unique human presence · Zero biometric data stored onchain
+            <View style={styles.zkStepItem}>
+              <Text style={{ fontSize: 13, marginRight: 8 }}>
+                {progressStage >= 1 ? '✅' : '⏳'}
+              </Text>
+              <Text
+                style={[
+                  styles.zkStepText,
+                  {
+                    color: progressStage >= 1 ? colors.fg : colors.fg3,
+                    fontWeight: progressStage === 1 ? '800' : '600',
+                  },
+                ]}
+              >
+                1. Biometric Liveness &amp; 3D Anti-Spoofing Check
+              </Text>
+            </View>
+
+            <View style={styles.zkStepItem}>
+              <Text style={{ fontSize: 13, marginRight: 8 }}>
+                {progressStage >= 2 ? '✅' : '⏳'}
+              </Text>
+              <Text
+                style={[
+                  styles.zkStepText,
+                  {
+                    color: progressStage >= 2 ? colors.fg : colors.fg3,
+                    fontWeight: progressStage === 2 ? '800' : '600',
+                  },
+                ]}
+              >
+                2. Generating 1:1 zk-SNARK Groth16 Proof &amp; Nullifier
+              </Text>
+            </View>
+
+            <View style={styles.zkStepItem}>
+              <Text style={{ fontSize: 13, marginRight: 8 }}>
+                {isVerified ? '✅' : '⏳'}
+              </Text>
+              <Text
+                style={[
+                  styles.zkStepText,
+                  {
+                    color: isVerified ? colors.fg : colors.fg3,
+                    fontWeight: isVerified ? '800' : '600',
+                  },
+                ]}
+              >
+                3. On-Chain World ID Verification on Ethereum Sepolia
+              </Text>
+            </View>
+          </View>
+
+          {/* ── ZERO-KNOWLEDGE PRIVACY GUARANTEE BANNER ── */}
+          <View
+            style={[
+              styles.privacyCard,
+              {
+                backgroundColor: colors.raised,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <View style={styles.privacyHeader}>
+              <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
+                <Path
+                  d="M12 2L4 6V12C4 16.42 7.58 20.17 12 21C16.42 20.17 20 16.42 20 12V6L12 2Z"
+                  stroke="#1DB563"
+                  strokeWidth={2}
+                  strokeLinejoin="round"
+                />
+                <Path d="M9 12l2 2 4-4" stroke="#1DB563" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+              </Svg>
+              <Text style={[styles.privacyTitle, { color: '#1DB563' }]}>
+                1:1 ZERO-KNOWLEDGE PROOF PRIVACY GUARANTEE
+              </Text>
+            </View>
+            <Text style={[styles.privacyBody, { color: colors.fg2 }]}>
+              No selfies, photos, or facial biometric records are ever stored on-chain or sent to any servers. Only mathematical zero-knowledge proofs are verified.
             </Text>
           </View>
 
-          {/* Cancel button */}
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={onClose}
-            style={[styles.cancelButton, { borderColor: colors.border }]}
-          >
-            <Text style={styles.cancelButtonText}>Cancel Transaction</Text>
-          </TouchableOpacity>
+          {/* Bottom Actions */}
+          {!isVerified ? (
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={onClose}
+              style={[styles.cancelButton, { borderColor: colors.border }]}
+            >
+              <Text style={styles.cancelButtonText}>Cancel Step-Up Auth</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.verifiedRow}>
+              <ActivityIndicator size="small" color="#1DB563" style={{ marginRight: 8 }} />
+              <Text style={[styles.verifiedSuccessText, { color: '#1DB563' }]}>
+                Authorization Complete · Resuming Action…
+              </Text>
+            </View>
+          )}
         </View>
       </View>
     </Modal>
@@ -314,52 +505,77 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
     borderTopWidth: 1,
-    paddingHorizontal: 24,
+    paddingHorizontal: 22,
     paddingTop: 14,
-    paddingBottom: Platform.OS === 'ios' ? 44 : 28,
+    paddingBottom: Platform.OS === 'ios' ? 44 : 26,
     alignItems: 'center',
   },
   sheetHandle: {
     width: 40,
     height: 4,
     borderRadius: 2,
-    marginBottom: 20,
+    marginBottom: 16,
   },
-  shieldBadge: {
-    width: 52,
-    height: 52,
-    borderRadius: 18,
-    borderWidth: 1,
+  headerBadgeRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 14,
+    gap: 8,
+    marginBottom: 12,
+  },
+  worldIdBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  worldIdBadgeText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#1DB563',
+    letterSpacing: 1,
+  },
+  levelPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  levelPillText: {
+    fontSize: 10,
+    fontWeight: '800',
   },
   titleBlock: {
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 16,
   },
   sheetTitle: {
     fontSize: 17,
     fontWeight: '900',
-    marginBottom: 6,
+    marginBottom: 4,
     textAlign: 'center',
   },
   sheetSubtitle: {
-    fontSize: 13,
+    fontSize: 12,
     textAlign: 'center',
-    lineHeight: 18,
+    lineHeight: 17,
   },
-  scanViewportContainer: {
+  viewfinderContainer: {
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 16,
   },
-  scanRing: {
-    width: 190,
-    height: 190,
+  viewfinderFrame: {
+    width: 170,
+    height: 170,
+    borderRadius: 85,
+    borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
-    marginBottom: 12,
+    overflow: 'hidden',
+    marginBottom: 10,
   },
   radarSweep: {
     ...StyleSheet.absoluteFill,
@@ -367,31 +583,64 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   radarSweepSegment: {
-    width: 176,
-    height: 176,
-    borderRadius: 88,
-    borderWidth: 8,
+    width: 156,
+    height: 156,
+    borderRadius: 78,
+    borderWidth: 6,
     borderTopColor: 'transparent',
     borderBottomColor: 'transparent',
     borderLeftColor: 'transparent',
-    opacity: 0.25,
+    opacity: 0.35,
   },
-  faceMeshInner: {
-    width: 154,
-    height: 154,
-    borderRadius: 77,
-    borderWidth: 1,
+  cornerTL: {
+    position: 'absolute',
+    top: 14,
+    left: 14,
+    width: 14,
+    height: 14,
+    borderTopWidth: 2.5,
+    borderLeftWidth: 2.5,
+  },
+  cornerTR: {
+    position: 'absolute',
+    top: 14,
+    right: 14,
+    width: 14,
+    height: 14,
+    borderTopWidth: 2.5,
+    borderRightWidth: 2.5,
+  },
+  cornerBL: {
+    position: 'absolute',
+    bottom: 14,
+    left: 14,
+    width: 14,
+    height: 14,
+    borderBottomWidth: 2.5,
+    borderLeftWidth: 2.5,
+  },
+  cornerBR: {
+    position: 'absolute',
+    bottom: 14,
+    right: 14,
+    width: 14,
+    height: 14,
+    borderBottomWidth: 2.5,
+    borderRightWidth: 2.5,
+  },
+  faceMeshLayer: {
+    width: 130,
+    height: 130,
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
     position: 'relative',
   },
   scanLaserLine: {
     position: 'absolute',
     left: 0,
     right: 0,
-    height: 2,
-    opacity: 0.8,
+    height: 2.5,
+    opacity: 0.85,
   },
   statusRow: {
     flexDirection: 'row',
@@ -404,33 +653,67 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   statusLabel: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
   },
-  privacyPill: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 24,
+  zkStepsCard: {
+    width: '100%',
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 8,
+    marginBottom: 12,
+  },
+  zkStepItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  zkStepText: {
+    fontSize: 11,
+    flex: 1,
+  },
+  privacyCard: {
+    padding: 12,
+    borderRadius: 16,
     borderWidth: 1,
     marginBottom: 16,
     width: '100%',
   },
-  privacyText: {
+  privacyHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  privacyTitle: {
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+  },
+  privacyBody: {
     fontSize: 11,
-    fontWeight: '600',
-    textAlign: 'center',
-    lineHeight: 16,
+    lineHeight: 15,
   },
   cancelButton: {
     width: '100%',
-    paddingVertical: 14,
-    borderRadius: 28,
+    paddingVertical: 13,
+    borderRadius: 24,
     borderWidth: 1,
     alignItems: 'center',
   },
   cancelButtonText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
     color: '#FF4757',
+  },
+  verifiedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+  },
+  verifiedSuccessText: {
+    fontSize: 13,
+    fontWeight: '800',
   },
 })

@@ -12,8 +12,9 @@ import {
 } from 'react-native'
 import Svg, { Path, Rect, Circle } from 'react-native-svg'
 import { useTheme } from '../ThemeContext'
+import BiometricModal from './BiometricModal'
 
-interface SubAccount {
+export interface SubAccount {
   id: string
   name: string
   ens: string
@@ -26,6 +27,10 @@ interface SubAccount {
   badgeBorder: string
   initials: string
   avatarHue: string
+  weeklyLimit?: string
+  autoDrop?: string
+  canSend?: boolean
+  canEditProfile?: boolean
 }
 
 const SEED_ACCOUNTS: SubAccount[] = [
@@ -42,6 +47,10 @@ const SEED_ACCOUNTS: SubAccount[] = [
     badgeBorder: 'rgba(29,181,99,0.28)',
     initials: 'AX',
     avatarHue: '150',
+    weeklyLimit: '$50/week',
+    autoDrop: '0.04 ETH / week',
+    canSend: true,
+    canEditProfile: true,
   },
   {
     id: 'savings',
@@ -56,6 +65,10 @@ const SEED_ACCOUNTS: SubAccount[] = [
     badgeBorder: 'rgba(212,144,10,0.28)',
     initials: 'SM',
     avatarHue: '38',
+    weeklyLimit: '$0/week (Locked)',
+    autoDrop: 'None',
+    canSend: false,
+    canEditProfile: false,
   },
   {
     id: 'allowance',
@@ -70,6 +83,10 @@ const SEED_ACCOUNTS: SubAccount[] = [
     badgeBorder: 'rgba(125,132,148,0.26)',
     initials: 'AL',
     avatarHue: '220',
+    weeklyLimit: '$35/week',
+    autoDrop: '$50 / month',
+    canSend: true,
+    canEditProfile: false,
   },
 ]
 
@@ -80,6 +97,10 @@ export default function PermissionsTab() {
   const { colors } = useTheme()
   const [accounts, setAccounts] = useState<SubAccount[]>(SEED_ACCOUNTS)
   const [showIssue, setShowIssue] = useState(false)
+  const [selectedAccount, setSelectedAccount] = useState<SubAccount | null>(null)
+  const [showPolicyModal, setShowPolicyModal] = useState(false)
+  const [showStepUpAuth, setShowStepUpAuth] = useState(false)
+  const [pendingPolicyLimit, setPendingPolicyLimit] = useState('$50/week')
 
   const handleMinted = (name: string) => {
     const initials = name.slice(0, 2).toUpperCase()
@@ -97,9 +118,33 @@ export default function PermissionsTab() {
       badgeBorder: 'rgba(29,181,99,0.28)',
       initials,
       avatarHue: hue,
+      weeklyLimit: '$50/week',
+      autoDrop: 'None',
+      canSend: true,
+      canEditProfile: true,
     }
     setAccounts((prev) => [...prev, newAcc])
     setShowIssue(false)
+  }
+
+  const handleOpenPolicy = (acc: SubAccount) => {
+    setSelectedAccount(acc)
+    setPendingPolicyLimit(acc.weeklyLimit || '$50/week')
+    setShowPolicyModal(true)
+  }
+
+  const handleConfirmPolicyAuth = () => {
+    if (selectedAccount) {
+      setAccounts((prev) =>
+        prev.map((a) =>
+          a.id === selectedAccount.id
+            ? { ...a, weeklyLimit: pendingPolicyLimit, role: `Limit: ${pendingPolicyLimit}` }
+            : a
+        )
+      )
+    }
+    setShowStepUpAuth(false)
+    setShowPolicyModal(false)
   }
 
   return (
@@ -139,8 +184,10 @@ export default function PermissionsTab() {
         {/* Nodes List */}
         <View style={styles.nodesList}>
           {accounts.map((acc) => (
-            <View
+            <TouchableOpacity
               key={acc.id}
+              activeOpacity={0.75}
+              onPress={() => handleOpenPolicy(acc)}
               style={[
                 styles.accountRow,
                 {
@@ -200,7 +247,7 @@ export default function PermissionsTab() {
                   {acc.ens}
                 </Text>
                 <Text style={[styles.accountRole, { color: colors.fg2 }]}>
-                  {acc.role}
+                  {acc.weeklyLimit ? `Limit: ${acc.weeklyLimit}` : acc.role}
                 </Text>
               </View>
 
@@ -212,7 +259,7 @@ export default function PermissionsTab() {
                   {acc.fiat}
                 </Text>
               </View>
-            </View>
+            </TouchableOpacity>
           ))}
 
           {/* Issue CTA */}
@@ -255,6 +302,29 @@ export default function PermissionsTab() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Policy Guardrail Modal with World ID Step-Up Auth */}
+      {showPolicyModal && selectedAccount && (
+        <PolicyGuardrailModal
+          account={selectedAccount}
+          currentLimit={pendingPolicyLimit}
+          onSelectLimit={setPendingPolicyLimit}
+          onRequestStepUp={() => setShowStepUpAuth(true)}
+          onClose={() => setShowPolicyModal(false)}
+        />
+      )}
+
+      {/* World ID Proof-of-Humanity Step-Up Auth Modal */}
+      {showStepUpAuth && selectedAccount && (
+        <BiometricModal
+          onClose={() => setShowStepUpAuth(false)}
+          onConfirm={handleConfirmPolicyAuth}
+          actionType="policy"
+          amount={pendingPolicyLimit}
+          recipient={selectedAccount.ens}
+          policyDetails={`Parent Policy Update: ${pendingPolicyLimit} limit on ${selectedAccount.ens}`}
+        />
+      )}
 
       {showIssue && (
         <IssueSubnameWizardSheet
@@ -902,6 +972,329 @@ function IssueSubnameWizardSheet({
   )
 }
 
+function PolicyGuardrailModal({
+  account,
+  currentLimit,
+  onSelectLimit,
+  onRequestStepUp,
+  onClose,
+}: {
+  account: SubAccount
+  currentLimit: string
+  onSelectLimit: (val: string) => void
+  onRequestStepUp: () => void
+  onClose: () => void
+}) {
+  const { colors } = useTheme()
+  const [allowanceDrop, setAllowanceDrop] = useState(account.autoDrop || '$50 / week')
+  const [canSend, setCanSend] = useState(account.canSend !== false)
+  const [canEdit, setCanEdit] = useState(account.canEditProfile !== false)
+
+  const limitOptions = ['$25/week', '$50/week', '$100/week', '$250/week', 'No Limit']
+
+  return (
+    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
+      <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}>
+        <TouchableOpacity
+          style={StyleSheet.absoluteFill}
+          activeOpacity={1}
+          onPress={onClose}
+        />
+        <View
+          style={[
+            styles.sheetModalBox,
+            {
+              backgroundColor: colors.surface,
+              borderTopColor: colors.border,
+            },
+          ]}
+        >
+          <View style={[styles.sheetHandle, { backgroundColor: colors.border2 }]} />
+
+          <ScrollView
+            style={styles.sheetScroll}
+            contentContainerStyle={styles.sheetScrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Header */}
+            <View style={styles.policyHeaderRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.policyHeaderTitle, { color: colors.fg }]}>
+                  Policy &amp; Allowance Guardrails
+                </Text>
+                <Text style={[styles.policyHeaderEns, { color: colors.accent }]}>
+                  {account.ens}
+                </Text>
+              </View>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={onClose}
+                style={[
+                  styles.wizardCloseBtn,
+                  {
+                    backgroundColor: colors.raised,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
+                <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
+                  <Path
+                    d="M18 6L6 18M6 6l12 12"
+                    stroke={colors.fg2}
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                  />
+                </Svg>
+              </TouchableOpacity>
+            </View>
+
+            {/* Member Profile Banner */}
+            <View
+              style={[
+                styles.memberBanner,
+                {
+                  backgroundColor: colors.raised,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <View
+                style={[
+                  styles.avatarBox,
+                  {
+                    backgroundColor: `hsl(${account.avatarHue}, 35%, 88%)`,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.avatarText,
+                    { color: `hsl(${account.avatarHue}, 45%, 28%)` },
+                  ]}
+                >
+                  {account.initials}
+                </Text>
+              </View>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={[styles.memberName, { color: colors.fg }]}>
+                  {account.name}
+                </Text>
+                <Text style={[styles.memberRole, { color: colors.fg3 }]}>
+                  {account.role}
+                </Text>
+              </View>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={[styles.memberBalanceEth, { color: colors.fg }]}>
+                  {account.eth}
+                </Text>
+                <Text style={[styles.memberBalanceFiat, { color: colors.fg3 }]}>
+                  {account.fiat}
+                </Text>
+              </View>
+            </View>
+
+            {/* Granular Spending Limits */}
+            <Text style={[styles.sectionTitleLabel, { color: colors.fg3 }]}>
+              Granular Weekly Spending Limit
+            </Text>
+            <View style={styles.limitsGrid}>
+              {limitOptions.map((opt) => (
+                <TouchableOpacity
+                  key={opt}
+                  activeOpacity={0.8}
+                  onPress={() => onSelectLimit(opt)}
+                  style={[
+                    styles.limitPill,
+                    {
+                      backgroundColor:
+                        currentLimit === opt ? colors.accent : colors.raised,
+                      borderColor:
+                        currentLimit === opt ? colors.accent : colors.border,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.limitPillText,
+                      {
+                        color:
+                          currentLimit === opt ? colors.accentFg : colors.fg,
+                      },
+                    ]}
+                  >
+                    {opt}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Automated Allowance Drops */}
+            <Text
+              style={[
+                styles.sectionTitleLabel,
+                { color: colors.fg3, marginTop: 14 },
+              ]}
+            >
+              Automated Allowance Drops
+            </Text>
+            <View
+              style={[
+                styles.autoDropCard,
+                {
+                  backgroundColor: colors.raised,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <View style={styles.autoDropRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.autoDropTitle, { color: colors.fg }]}>
+                    Scheduled Drop: Weekly
+                  </Text>
+                  <Text style={[styles.autoDropSub, { color: colors.fg3 }]}>
+                    Auto-deposits to {account.ens}
+                  </Text>
+                </View>
+                <Text style={[styles.autoDropValue, { color: '#1DB563' }]}>
+                  {allowanceDrop}
+                </Text>
+              </View>
+            </View>
+
+            {/* Parent Enforced Permission Toggles */}
+            <Text
+              style={[
+                styles.sectionTitleLabel,
+                { color: colors.fg3, marginTop: 14 },
+              ]}
+            >
+              Parent-Enforced Delegated Permissions
+            </Text>
+            <View
+              style={[
+                styles.permsContainer,
+                {
+                  backgroundColor: colors.raised,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <View
+                style={[
+                  styles.permItemRow,
+                  { borderBottomColor: colors.border, borderBottomWidth: 1 },
+                ]}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.permItemTitle, { color: colors.fg }]}>
+                    Allow Sub-Account Transfers
+                  </Text>
+                  <Text style={[styles.permItemSub, { color: colors.fg3 }]}>
+                    Enable member to send funds within weekly limit
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => setCanSend(!canSend)}
+                  style={[
+                    styles.toggleTrack,
+                    {
+                      backgroundColor: canSend ? colors.accent : colors.border2,
+                    },
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.toggleThumb,
+                      {
+                        alignSelf: canSend ? 'flex-end' : 'flex-start',
+                        backgroundColor: canSend
+                          ? colors.accentFg
+                          : colors.fg3,
+                      },
+                    ]}
+                  />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.permItemRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.permItemTitle, { color: colors.fg }]}>
+                    Edit Profile &amp; Avatar
+                  </Text>
+                  <Text style={[styles.permItemSub, { color: colors.fg3 }]}>
+                    Allow customizing ENS text records
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => setCanEdit(!canEdit)}
+                  style={[
+                    styles.toggleTrack,
+                    {
+                      backgroundColor: canEdit ? colors.accent : colors.border2,
+                    },
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.toggleThumb,
+                      {
+                        alignSelf: canEdit ? 'flex-end' : 'flex-start',
+                        backgroundColor: canEdit
+                          ? colors.accentFg
+                          : colors.fg3,
+                      },
+                    ]}
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* World ID Step-Up Notice */}
+            <View
+              style={[
+                styles.worldIdNoticeCard,
+                {
+                  backgroundColor: 'rgba(29,181,99,0.08)',
+                  borderColor: 'rgba(29,181,99,0.25)',
+                },
+              ]}
+            >
+              <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+                <Circle cx="12" cy="12" r="9" stroke="#1DB563" strokeWidth={2} />
+                <Circle cx="12" cy="12" r="4" fill="#1DB563" />
+              </Svg>
+              <Text style={[styles.worldIdNoticeText, { color: colors.fg }]}>
+                World ID Proof-of-Humanity Step-Up Auth required to modify parent permissions. 1:1 zk-SNARK proof protects your family node.
+              </Text>
+            </View>
+
+            {/* Save Button with World ID Step-Up */}
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={onRequestStepUp}
+              style={[
+                styles.savePolicyBtn,
+                { backgroundColor: colors.accent },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.savePolicyBtnText,
+                  { color: colors.accentFg },
+                ]}
+              >
+                Save Policy with World ID Step-Up Auth
+              </Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  )
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -1441,5 +1834,119 @@ const styles = StyleSheet.create({
   copiedLinkText: {
     fontSize: 12,
     fontWeight: '600',
+  },
+  policyHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  policyHeaderTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  policyHeaderEns: {
+    fontSize: 13,
+    fontWeight: '800',
+    marginTop: 2,
+  },
+  memberBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 18,
+    borderWidth: 1,
+    marginBottom: 16,
+  },
+  memberName: {
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  memberRole: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  memberBalanceEth: {
+    fontSize: 14,
+    fontWeight: '800',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  memberBalanceFiat: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  sectionTitleLabel: {
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+  },
+  limitsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 8,
+  },
+  limitPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  limitPillText: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  autoDropCard: {
+    padding: 14,
+    borderRadius: 18,
+    borderWidth: 1,
+    marginBottom: 8,
+  },
+  autoDropRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  autoDropTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  autoDropSub: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  autoDropValue: {
+    fontSize: 13,
+    fontWeight: '800',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  worldIdNoticeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginTop: 14,
+    marginBottom: 16,
+  },
+  worldIdNoticeText: {
+    flex: 1,
+    fontSize: 11,
+    lineHeight: 16,
+    fontWeight: '600',
+  },
+  savePolicyBtn: {
+    paddingVertical: 15,
+    borderRadius: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  savePolicyBtnText: {
+    fontSize: 14,
+    fontWeight: '900',
   },
 })
