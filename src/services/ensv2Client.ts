@@ -180,8 +180,61 @@ export async function executeEnsRegistration(
   onProgress?: (progress: RegistrationProgress) => void
 ): Promise<RegistrationResult> {
   const cleanName = ensName.trim().toLowerCase()
+  const isSubname = cleanName.split('.').length > 2
 
   try {
+    // ─── Subnames: Route through Pimlico for gasless minting ───
+    if (isSubname) {
+      const parts = cleanName.split('.')
+      const childLabel = parts[0]
+      const parentName = parts.slice(1).join('.')
+
+      onProgress?.({
+        stage: 'simulating',
+        detail: `Requesting Pimlico gas sponsorship for ${cleanName}...`,
+      })
+
+      const { mintGaslessSubname } = await import('./pimlicoPaymaster')
+      const result = await mintGaslessSubname(
+        parentName,
+        childLabel,
+        ownerAddress,
+        (stage, detail) => {
+          const stageMap: Record<string, RegistrationStage> = {
+            preparing: 'simulating',
+            sponsoring: 'simulating',
+            submitting: 'broadcasting',
+            confirming: 'confirming',
+            confirmed: 'confirmed',
+          }
+          onProgress?.({
+            stage: stageMap[stage] || 'simulating',
+            detail,
+          })
+        }
+      )
+
+      const explorerUrl = `${ENSV2_HACKATHON_CONFIG.explorerUrl}name/${cleanName}`
+      const appUrl = `${ENSV2_HACKATHON_CONFIG.appUrl}name/${cleanName}`
+
+      onProgress?.({
+        stage: 'confirmed',
+        detail: `🎉 ${cleanName} minted gaslessly! Gas sponsored by Pimlico.`,
+        txHash: result.txHash,
+        explorerUrl,
+      })
+
+      return {
+        success: true,
+        ensName: cleanName,
+        ownerAddress,
+        txHash: result.txHash,
+        explorerUrl,
+        appUrl,
+      }
+    }
+
+    // ─── Root names: Standard registration flow ───
     // Stage 1: Simulation & Paymaster verification
     onProgress?.({
       stage: 'simulating',
@@ -237,4 +290,5 @@ export async function executeEnsRegistration(
     throw err
   }
 }
+
 
