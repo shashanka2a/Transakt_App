@@ -25,8 +25,7 @@ interface AuthContextType {
   privyAppId: string
 }
 
-const DEFAULT_PRIVY_APP_ID =
-  process.env.EXPO_PUBLIC_PRIVY_APP_ID || 'cmto2iefd000q0bla0z8jfitr'
+const DEFAULT_PRIVY_APP_ID = process.env.EXPO_PUBLIC_PRIVY_APP_ID as string
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
@@ -199,7 +198,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // A. Check for injected Web3 provider in browser (MetaMask / injected EIP-1193)
       if (typeof window !== 'undefined' && (window as any).ethereum) {
         const eth = (window as any).ethereum
-        // Support multi-provider setups (e.g. MetaMask alongside Coinbase Wallet)
         const provider =
           eth.providers?.find((p: any) => p.isMetaMask) ||
           (eth.isMetaMask ? eth : eth)
@@ -216,19 +214,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (ethErr?.code === 4001 || ethErr?.message?.includes('User rejected')) {
               throw new Error('Connection request was rejected in MetaMask.')
             }
-            console.warn('Injected Web3 request accounts notice:', ethErr)
+            throw new Error(`MetaMask error: ${ethErr?.message || 'Unknown error'}`)
           }
+        } else if (type === 'walletconnect') {
+          throw new Error('WalletConnect is currently disabled. Please use MetaMask.')
+        }
+      } else {
+        // No injected provider (e.g. mobile or no extension)
+        if (type === 'metamask') {
+          throw new Error('MetaMask is not installed. Please use a Web3 browser or install the extension.')
+        } else {
+          throw new Error('WalletConnect requires a project ID setup. Please use MetaMask on Web for now.')
         }
       }
 
-      // B. Mobile or fallback pairing simulation if no injected provider
       if (!externalAddress) {
-        await new Promise((resolve) => setTimeout(resolve, 900))
-        if (type === 'metamask') {
-          externalAddress = '0x1aD91eeC094c299F1269E64F37264aD5E5496465'
-        } else {
-          externalAddress = '0x9Bca473B5B8539b97779d750cDE2782eF939D840'
-        }
+        throw new Error('Failed to retrieve external wallet address.')
       }
 
       const shortAddr = `${externalAddress.slice(0, 6)}...${externalAddress.slice(-4)}`

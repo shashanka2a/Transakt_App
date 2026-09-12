@@ -9,9 +9,7 @@
 
 export const PIMLICO_CONFIG = {
   /** Pimlico Bundler v2 RPC endpoint (Sepolia) */
-  rpcUrl:
-    process.env.EXPO_PUBLIC_PIMLICO_RPC_URL ||
-    'https://api.pimlico.io/v2/11155111/rpc?apikey=pim_7ks5iRRdgQyVSnN3f1GLbW',
+  rpcUrl: process.env.EXPO_PUBLIC_PIMLICO_RPC_URL as string,
 
   chainId: 11155111,
   entryPointVersion: '0.7' as const,

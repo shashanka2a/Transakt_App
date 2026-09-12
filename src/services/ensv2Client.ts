@@ -11,9 +11,7 @@ export const ENSV2_HACKATHON_CONFIG = {
   universalResolverAddress: '0xd26f2040d083af1cd2962ba303f4bea0c4faf142' as const,
   appUrl: 'https://hackathon-deployment-manager-app-v4.ens-cf.workers.dev/',
   explorerUrl: 'https://hackathon-deployment-portal-app.ens-cf.workers.dev/',
-  defaultRpcUrl:
-    process.env.EXPO_PUBLIC_SEPOLIA_RPC_URL ||
-    'https://eth-sepolia.g.alchemy.com/v2/alch_MLfccmm0R5vlTvvshnekM',
+  defaultRpcUrl: process.env.EXPO_PUBLIC_SEPOLIA_RPC_URL as string,
 }
 
 // Public Client instance targeting standard Sepolia ENS resolution

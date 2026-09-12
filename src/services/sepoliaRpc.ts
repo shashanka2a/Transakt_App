@@ -2,13 +2,9 @@ import { createPublicClient, http, formatEther } from 'viem'
 import { sepolia } from 'viem/chains'
 
 export const SEPOLIA_CONFIG = {
-  apiKey: process.env.EXPO_PUBLIC_ALCHEMY_API_KEY || 'alch_MLfccmm0R5vlTvvshnekM',
-  rpcUrl:
-    process.env.EXPO_PUBLIC_SEPOLIA_RPC_URL ||
-    'https://eth-sepolia.g.alchemy.com/v2/alch_MLfccmm0R5vlTvvshnekM',
-  gasPolicyId:
-    process.env.EXPO_PUBLIC_ALCHEMY_GAS_POLICY_ID ||
-    '0d31ecb2-b2bd-46fe-a94c-be209d8b17f7',
+  apiKey: process.env.EXPO_PUBLIC_ALCHEMY_API_KEY as string,
+  rpcUrl: process.env.EXPO_PUBLIC_SEPOLIA_RPC_URL as string,
+  gasPolicyId: process.env.EXPO_PUBLIC_ALCHEMY_GAS_POLICY_ID as string,
   faucetWebUrl: 'https://sepoliafaucet.com',
 }
 
