@@ -11,8 +11,8 @@ import {
   ActivityIndicator,
 } from 'react-native'
 import { Tab } from '../App'
-import { useTheme } from '../ThemeContext'
-import { useAuth } from '../AuthContext'
+import { useTheme } from '../context/ThemeContext'
+import { useAuth } from '../context/AuthContext'
 import {
   IconSend,
   IconRequest,
@@ -31,7 +31,7 @@ import {
   getLiveAssetTransfers,
   OnchainTransfer,
   isValidEthereumAddress,
-} from '../services/alchemyFaucetService'
+} from '../services/sepoliaRpc'
 
 const nodes = [
   {

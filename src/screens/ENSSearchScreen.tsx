@@ -12,8 +12,8 @@ import {
   Platform,
 } from 'react-native'
 import Svg, { Path } from 'react-native-svg'
-import { useTheme } from '../ThemeContext'
-import { useAuth } from '../AuthContext'
+import { useTheme } from '../context/ThemeContext'
+import { useAuth } from '../context/AuthContext'
 import { IconCheck, IconX, EthDiamond } from '../components/Icons'
 import {
   checkEnsAvailability,
@@ -25,7 +25,7 @@ import {
   getSepoliaBalance,
   watchSepoliaBalance,
   isValidEthereumAddress,
-} from '../services/alchemyFaucetService'
+} from '../services/sepoliaRpc'
 
 interface Props {
   onPurchase: () => void

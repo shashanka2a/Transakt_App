@@ -14,8 +14,8 @@ import {
 import Svg, { Rect, Path, Circle } from 'react-native-svg'
 import { TransaktMark } from './LoadingScreen'
 import { MetaMaskIcon, WalletConnectIcon, IconX } from '../components/Icons'
-import { useTheme } from '../ThemeContext'
-import { useAuth } from '../AuthContext'
+import { useTheme } from '../context/ThemeContext'
+import { useAuth } from '../context/AuthContext'
 
 interface Props {
   onContinue: () => void

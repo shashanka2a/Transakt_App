@@ -17,7 +17,7 @@ import {
   IconNote,
   IconChevronDown,
 } from '../components/Icons'
-import { useTheme } from '../ThemeContext'
+import { useTheme } from '../context/ThemeContext'
 
 type Step = 'compose' | 'sent'
 

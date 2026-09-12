@@ -14,12 +14,12 @@ import {
 } from 'react-native'
 import Svg, { Path, Circle } from 'react-native-svg'
 import { TokenLogo, UniswapBadge } from '../components/Icons'
-import { useTheme } from '../ThemeContext'
-import { useAuth } from '../AuthContext'
+import { useTheme } from '../context/ThemeContext'
+import { useAuth } from '../context/AuthContext'
 import {
   getSepoliaBalance,
   isValidEthereumAddress,
-} from '../services/alchemyFaucetService'
+} from '../services/sepoliaRpc'
 import { executeGaslessSwap, PIMLICO_CONFIG } from '../services/pimlicoPaymaster'
 
 interface Props {

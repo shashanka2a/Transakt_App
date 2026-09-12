@@ -17,7 +17,7 @@ import Svg, {
   Line,
   Rect,
 } from 'react-native-svg'
-import { useTheme } from '../ThemeContext'
+import { useTheme } from '../context/ThemeContext'
 import {
   generateWorldIdZKProof,
   verifyWorldIdProofOnchain,

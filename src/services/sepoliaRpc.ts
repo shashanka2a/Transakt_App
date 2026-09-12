@@ -12,16 +12,12 @@ export const SEPOLIA_CONFIG = {
   faucetWebUrl: 'https://sepoliafaucet.com',
 }
 
-// Backward compatibility alias
-export const ALCHEMY_CONFIG = SEPOLIA_CONFIG
 
 export const sepoliaRpcClient = createPublicClient({
   chain: sepolia,
   transport: http(SEPOLIA_CONFIG.rpcUrl),
 })
 
-// Backward compatibility alias
-export const alchemySepoliaClient = sepoliaRpcClient
 
 /**
  * Validates whether a string is a strict 42-character hexadecimal Ethereum address.
@@ -114,8 +110,6 @@ export function watchSepoliaBalance(
   }
 }
 
-// Backward compatibility alias
-export const watchAlchemyBalance = watchSepoliaBalance
 
 export interface OnchainTransfer {
   hash: string

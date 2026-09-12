@@ -43,7 +43,7 @@ const AuthContext = createContext<AuthContextType>({
   privyAppId: DEFAULT_PRIVY_APP_ID,
 })
 
-import { isValidEthereumAddress } from './services/alchemyFaucetService'
+import { isValidEthereumAddress } from '../services/sepoliaRpc'
 
 // Deterministic smart account address generator for realistic fallback
 function generateSmartAccountAddress(seed: string): string {

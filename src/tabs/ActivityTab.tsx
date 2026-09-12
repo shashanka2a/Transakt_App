@@ -9,15 +9,15 @@ import {
   Linking,
   ActivityIndicator,
 } from 'react-native'
-import { useTheme } from '../ThemeContext'
-import { useAuth } from '../AuthContext'
+import { useTheme } from '../context/ThemeContext'
+import { useAuth } from '../context/AuthContext'
 import { EthDiamond } from '../components/Icons'
 import {
   getSepoliaBalance,
   getLiveAssetTransfers,
   OnchainTransfer,
   isValidEthereumAddress,
-} from '../services/alchemyFaucetService'
+} from '../services/sepoliaRpc'
 
 const filterOptions = ['All', 'Incoming', 'Outgoing', 'External', 'ERC20']
 

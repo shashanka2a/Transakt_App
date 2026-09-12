@@ -17,7 +17,7 @@ import {
   IconNote,
   IconChevronDown,
 } from '../components/Icons'
-import { useTheme } from '../ThemeContext'
+import { useTheme } from '../context/ThemeContext'
 import { resolveEnsAddress } from '../services/ensv2Client'
 
 const presets = ['$10', '$25', '$50', 'Max']

@@ -11,7 +11,7 @@ import {
   Platform,
 } from 'react-native'
 import Svg, { Path, Rect, Circle } from 'react-native-svg'
-import { useTheme } from '../ThemeContext'
+import { useTheme } from '../context/ThemeContext'
 
 interface Props {
   onClose: () => void

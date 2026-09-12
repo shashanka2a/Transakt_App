@@ -2,7 +2,7 @@ import React from 'react'
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native'
 import Svg, { Path, Rect, Circle, Polyline } from 'react-native-svg'
 import { Tab } from '../App'
-import { useTheme } from '../ThemeContext'
+import { useTheme } from '../context/ThemeContext'
 
 interface NavTabItem {
   id: Tab

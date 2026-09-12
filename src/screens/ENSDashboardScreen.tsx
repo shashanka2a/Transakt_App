@@ -19,14 +19,14 @@ import {
   IconMoon,
   EthDiamond,
 } from '../components/Icons'
-import { useTheme } from '../ThemeContext'
-import { useAuth } from '../AuthContext'
-import IssueSubnameModal from './IssueSubnameModal'
+import { useTheme } from '../context/ThemeContext'
+import { useAuth } from '../context/AuthContext'
+import IssueSubnameModal from '../modals/IssueSubnameModal'
 import {
   getSepoliaBalance,
   watchSepoliaBalance,
   isValidEthereumAddress,
-} from '../services/alchemyFaucetService'
+} from '../services/sepoliaRpc'
 
 interface Props {
   onEnterApp: () => void

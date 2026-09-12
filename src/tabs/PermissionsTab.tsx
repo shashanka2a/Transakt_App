@@ -11,8 +11,8 @@ import {
   Platform,
 } from 'react-native'
 import Svg, { Path, Rect, Circle } from 'react-native-svg'
-import { useTheme } from '../ThemeContext'
-import BiometricModal from './BiometricModal'
+import { useTheme } from '../context/ThemeContext'
+import BiometricModal from '../modals/BiometricModal'
 
 export interface SubAccount {
   id: string
