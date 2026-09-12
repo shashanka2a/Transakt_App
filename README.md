@@ -1,4 +1,4 @@
-# 🛡️ Transakt — Crypto for the Whole Family. Made Simple.
+# Transakt — Crypto for the Whole Family. Made Simple.
 
 <p align="center">
   <strong>Non-custodial family treasury, ENSv2 subname issuance, automated allowances, and World ID verification.</strong>
@@ -14,7 +14,7 @@
 
 ---
 
-## 📖 Overview
+## Overview
 
 **Transakt** is a non-custodial family treasury and crypto management platform designed to make onchain finance accessible, secure, and intuitive for every generation. 
 
@@ -24,40 +24,40 @@ Parents can create a family namespace (e.g. `smithfam.eth`), distribute custom g
 
 ---
 
-## ✨ Key Features
+## Key Features
 
-### 👤 1. Frictionless Onboarding (Powered by Privy)
+### 1. Frictionless Onboarding (Powered by Privy)
 - **One-Tap Sign-In:** Onboard family members via email, SMS, socials, or passkeys without requiring seed phrases.
 - **ERC-4337 Account Abstraction:** Smart accounts with gas sponsorship via paymasters—users never worry about holding raw ETH for gas.
 
-### 🏷️ 2. ENSv2 Family Subname Issuance
+### 2. ENSv2 Family Subname Issuance
 - **Human-Readable Identities:** Replace confusing hex addresses with readable handles (`alex.smithfam.eth`, `mom.smithfam.eth`, `vault.smithfam.eth`).
 - **Parent-Enforced Policies:** Parent nodes retain lifecycle rules and permission management over child subnames.
 
-### ⏳ 3. Automated Allowances & Guardrails
+### 3. Automated Allowances & Guardrails
 - **Automated Drops:** Schedule weekly or monthly allowance transfers directly to family member sub-accounts.
 - **Granular Spending Limits:** Set custom weekly budgets (e.g., $50/week) with automatic spend resets.
 
-### 🛡️ 4. World ID Proof-of-Humanity Step-Up Auth
+### 4. World ID Proof-of-Humanity Step-Up Auth
 - **Biometric Selfie Check:** Verify unique human identity during high-value transfers or policy modifications.
 - **1:1 Zero-Knowledge Proofs (ZK-SNARKs):** No biometric data or selfies are ever stored onchain or transmitted to servers.
 
-### 🔄 5. In-App Swaps & Portfolio Management
+### 5. In-App Swaps & Portfolio Management
 - **Decentralized Swaps:** Effortlessly trade between ETH, USDC, and other top tokens directly inside the app.
 - **Unified Treasury Dashboard:** Track total family net worth, individual sub-account balances, and onchain activity in real time.
 
 ---
 
-## 🏛️ Architecture & Tech Stack
+## Architecture & Tech Stack
 
 ```mermaid
 flowchart TB
     User(["👨‍👩‍👧‍👦 Family Members"])
     User --> UI["Transakt Client"]
 
-    UI -->|"Social / Passkey Login"| Privy
-    UI -->|"Issue / Resolve Subnames"| ENS
-    UI -->|"Step-Up Auth"| WorldID
+    UI -->|"Social / Passkey Login"| Auth
+    UI -->|"Issue / Resolve Subnames"| Identity
+    UI -->|"Step-Up Auth"| Security
 
     subgraph Identity["🏷️ Identity & Resolution"]
         ENS["ENSv2 & CCIP-Read\nERC-3668"]
@@ -95,6 +95,6 @@ flowchart TB
 | **Network** | Ethereum Sepolia Testnet | Smart contract deployment and gasless paymaster relay |
 
 ---
-## 📄 License
+## License
 
 This project is licensed under the [MIT License](./LICENSE) — feel free to use and adapt it for your own projects.
