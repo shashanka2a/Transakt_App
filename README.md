@@ -52,42 +52,42 @@ Parents can create a family namespace (e.g. `smithfam.eth`), distribute custom g
 
 ```mermaid
 flowchart TB
-    User(["👨‍👩‍👧‍👦 Family Members"])
+    User(["Family Members"])
     User --> UI["Transakt Client"]
 
     UI -->|"Social / Passkey Login"| Auth
     UI -->|"Issue / Resolve Subnames"| Identity
     UI -->|"Step-Up Auth"| Security
 
-    subgraph Identity["🏷️ Identity & Resolution"]
+    subgraph Identity["Identity & Resolution"]
         ENS["ENSv2 & CCIP-Read\nERC-3668"]
         ENS -->|"Parent/Child Policy"| EAC["Enhanced Access Control"]
     end
 
-    subgraph Auth["🔐 Authentication & Key Management"]
+    subgraph Auth["Authentication & Key Management"]
         Privy["Privy Smart Auth & MPC"]
         Privy -->|"ERC-4337 UserOp"| AA["Smart Contract Account"]
     end
 
-    subgraph Security["🛡️ Verification & Security"]
+    subgraph Security["Verification & Security"]
         WorldID["World ID\nZK Selfie Check"]
     end
 
     EAC --> AA
     WorldID -->|"ZK-SNARK Proof"| AA
 
-    AA -->|"Sponsored Gas Tx"| Paymaster
+    AA -->|"Sponsored Gas Tx"| Execution
 
-    subgraph Execution["⚡ Execution Layer"]
+    subgraph Execution["Execution Layer"]
         Paymaster["ERC-4337 Paymaster Relay\n(Pimlico)"]
-        Paymaster -->|"Onchain Settlement"| Sepolia["Ethereum Sepolia / L2"]
+        Paymaster -->|"Onchain Settlement"| Sepolia["Ethereum Sepolia"]
     end
 ```
 
 ### Core Technologies
 | Component | Technology | Description |
 |---|---|---|
-| **Framework** | [Next.js 14](https://nextjs.org/) (App Router) | High-performance React framework with server-side rendering |
+| **Framework** | [Expo](https://expo.dev/) (React Native) | Universal React framework for native iOS, Android, and Web |
 | **Styling** | [Tailwind CSS](https://tailwindcss.com/) | Curated modern design system with dynamic light/dark theming |
 | **Auth & Wallet** | [Privy](https://www.privy.io/) | Embedded wallets, passkey auth, and MPC key sharding |
 | **Naming Service** | [ENSv2](https://ens.domains/) | Offchain and L2 hierarchical subname issuance |
@@ -97,4 +97,4 @@ flowchart TB
 ---
 ## License
 
-This project is licensed under the [MIT License](./LICENSE) — feel free to use and adapt it for your own projects.
+This project is licensed under the [MIT License](https://opensource.org/licenses/MIT) — feel free to use and adapt it for your own projects.
