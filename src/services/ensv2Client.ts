@@ -235,42 +235,37 @@ export async function executeEnsRegistration(
     }
 
     // ─── Root names: Standard registration flow ───
-    // Stage 1: Simulation & Paymaster verification
     onProgress?.({
       stage: 'simulating',
       detail: 'Verifying Gas Manager sponsorship policy & simulating UserOperation...',
     })
-    await new Promise((resolve) => setTimeout(resolve, 1100))
 
-    // Stage 2: Broadcast to Sepolia Mempool
-    const hash = `0x${Array.from({ length: 64 }, () =>
-      Math.floor(Math.random() * 16).toString(16)
-    ).join('')}`
+    const { registerGaslessRootName } = await import('./pimlicoPaymaster')
+    const result = await registerGaslessRootName(
+      cleanName,
+      ownerAddress,
+      (stage, detail) => {
+        const stageMap: Record<string, RegistrationStage> = {
+          preparing: 'simulating',
+          sponsoring: 'simulating',
+          submitting: 'broadcasting',
+          confirming: 'confirming',
+          confirmed: 'confirmed',
+        }
+        onProgress?.({
+          stage: stageMap[stage] || 'simulating',
+          detail,
+        })
+      }
+    )
+
     const explorerUrl = `${ENSV2_HACKATHON_CONFIG.explorerUrl}name/${cleanName}`
     const appUrl = `${ENSV2_HACKATHON_CONFIG.appUrl}name/${cleanName}`
 
     onProgress?.({
-      stage: 'broadcasting',
-      detail: `Broadcasting transaction to Sepolia (Universal Resolver: ${ENSV2_HACKATHON_CONFIG.universalResolverAddress.slice(0, 6)}...)`,
-      txHash: hash,
-      explorerUrl,
-    })
-    await new Promise((resolve) => setTimeout(resolve, 1400))
-
-    // Stage 3: Confirmation & Node Ownership
-    onProgress?.({
-      stage: 'confirming',
-      detail: `Minting ENSv2 root node & binding reverse record to ${ownerAddress.slice(0, 6)}...${ownerAddress.slice(-4)}`,
-      txHash: hash,
-      explorerUrl,
-    })
-    await new Promise((resolve) => setTimeout(resolve, 1200))
-
-    // Stage 4: Confirmed
-    onProgress?.({
       stage: 'confirmed',
       detail: `🎉 ${cleanName} is officially registered and owned!`,
-      txHash: hash,
+      txHash: result.txHash,
       explorerUrl,
     })
 
@@ -278,7 +273,7 @@ export async function executeEnsRegistration(
       success: true,
       ensName: cleanName,
       ownerAddress,
-      txHash: hash,
+      txHash: result.txHash,
       explorerUrl,
       appUrl,
     }

@@ -51,29 +51,37 @@ Parents can create a family namespace (e.g. `smithfam.eth`), distribute custom g
 ## 🏛️ Architecture & Tech Stack
 
 ```mermaid
-graph TD
-    User([👨‍👩‍👧‍👦 Family Members]) -->|Web / Mobile App| UI[Transakt Client]
+flowchart TB
+    User(["👨‍👩‍👧‍👦 Family Members"])
+    User --> UI["Transakt Client"]
 
-    subgraph Auth["Authentication & Key Management"]
-        Privy[Privy Smart Auth & MPC] -->|ERC-4337 UserOp| AA[Smart Contract Account]
+    UI -->|"Social / Passkey Login"| Privy
+    UI -->|"Issue / Resolve Subnames"| ENS
+    UI -->|"Step-Up Auth"| WorldID
+
+    subgraph Identity["🏷️ Identity & Resolution"]
+        ENS["ENSv2 & CCIP-Read\nERC-3668"]
+        ENS -->|"Parent/Child Policy"| EAC["Enhanced Access Control"]
     end
 
-    subgraph Identity["Identity & Resolution"]
-        ENS[ENSv2 & CCIP-Read ERC-3668] -->|Parent/Child Policy| EAC[Enhanced Access Control]
+    subgraph Auth["🔐 Authentication & Key Management"]
+        Privy["Privy Smart Auth & MPC"]
+        Privy -->|"ERC-4337 UserOp"| AA["Smart Contract Account"]
     end
 
-    subgraph Security["Verification & Security"]
-        WorldID[World ID ZK Selfie Check] -->|ZK-SNARK Proof| AA
+    subgraph Security["🛡️ Verification & Security"]
+        WorldID["World ID\nZK Selfie Check"]
     end
 
-    subgraph Execution["Execution Layer"]
-        AA -->|Sponsored Gas Tx| Paymaster[ERC-4337 Paymaster Relay]
-        Paymaster -->|Onchain Settlement| Sepolia[Ethereum Sepolia / L2]
-    end
+    EAC --> AA
+    WorldID -->|"ZK-SNARK Proof"| AA
 
-    UI -->|Social / Passkey Login| Privy
-    UI -->|Issue / Resolve Subnames| ENS
-    UI -->|Step-Up Auth / High-Value Tx| WorldID
+    AA -->|"Sponsored Gas Tx"| Paymaster
+
+    subgraph Execution["⚡ Execution Layer"]
+        Paymaster["ERC-4337 Paymaster Relay\n(Pimlico)"]
+        Paymaster -->|"Onchain Settlement"| Sepolia["Ethereum Sepolia / L2"]
+    end
 ```
 
 ### Core Technologies

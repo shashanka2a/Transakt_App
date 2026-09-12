@@ -12,6 +12,8 @@ import {
 } from 'react-native'
 import Svg, { Path, Rect, Circle } from 'react-native-svg'
 import { useTheme } from '../context/ThemeContext'
+import { useAuth } from '../context/AuthContext'
+import { mintGaslessSubname } from '../services/pimlicoPaymaster'
 import BiometricModal from '../modals/BiometricModal'
 
 export interface SubAccount {
@@ -33,62 +35,7 @@ export interface SubAccount {
   canEditProfile?: boolean
 }
 
-const SEED_ACCOUNTS: SubAccount[] = [
-  {
-    id: 'daily',
-    name: 'Daily Pocket',
-    ens: 'pay.smithfam.eth',
-    role: 'Alex · Teen',
-    eth: '0.12 ETH',
-    fiat: '$342.80',
-    badge: 'ACTIVE',
-    hex: '#1DB563',
-    badgeBg: 'rgba(29,181,99,0.12)',
-    badgeBorder: 'rgba(29,181,99,0.28)',
-    initials: 'AX',
-    avatarHue: '150',
-    weeklyLimit: '$50/week',
-    autoDrop: '0.04 ETH / week',
-    canSend: true,
-    canEditProfile: true,
-  },
-  {
-    id: 'savings',
-    name: 'Savings',
-    ens: 'vault.smithfam.eth',
-    role: 'Parent Controlled',
-    eth: '1.20 ETH',
-    fiat: '$3,428.00',
-    badge: 'LOCKED',
-    hex: '#D4900A',
-    badgeBg: 'rgba(212,144,10,0.12)',
-    badgeBorder: 'rgba(212,144,10,0.28)',
-    initials: 'SM',
-    avatarHue: '38',
-    weeklyLimit: '$0/week (Locked)',
-    autoDrop: 'None',
-    canSend: false,
-    canEditProfile: false,
-  },
-  {
-    id: 'allowance',
-    name: 'Allowance',
-    ens: 'allow.smithfam.eth',
-    role: 'Auto-refill · Monthly',
-    eth: '0.04 ETH',
-    fiat: '$114.27',
-    badge: 'AUTO',
-    hex: '#7D8494',
-    badgeBg: 'rgba(125,132,148,0.12)',
-    badgeBorder: 'rgba(125,132,148,0.26)',
-    initials: 'AL',
-    avatarHue: '220',
-    weeklyLimit: '$35/week',
-    autoDrop: '$50 / month',
-    canSend: true,
-    canEditProfile: false,
-  },
-]
+const SEED_ACCOUNTS: SubAccount[] = []
 
 const hues = ['150', '200', '280', '30', '0', '320']
 const randomHue = () => hues[Math.floor(Math.random() * hues.length)]
@@ -101,6 +48,7 @@ export default function PermissionsTab() {
   const [showPolicyModal, setShowPolicyModal] = useState(false)
   const [showStepUpAuth, setShowStepUpAuth] = useState(false)
   const [pendingPolicyLimit, setPendingPolicyLimit] = useState('$50/week')
+  const [pendingAllowanceDrop, setPendingAllowanceDrop] = useState('None')
 
   const handleMinted = (name: string) => {
     const initials = name.slice(0, 2).toUpperCase()
@@ -130,6 +78,7 @@ export default function PermissionsTab() {
   const handleOpenPolicy = (acc: SubAccount) => {
     setSelectedAccount(acc)
     setPendingPolicyLimit(acc.weeklyLimit || '$50/week')
+    setPendingAllowanceDrop(acc.autoDrop || 'None')
     setShowPolicyModal(true)
   }
 
@@ -138,7 +87,7 @@ export default function PermissionsTab() {
       setAccounts((prev) =>
         prev.map((a) =>
           a.id === selectedAccount.id
-            ? { ...a, weeklyLimit: pendingPolicyLimit, role: `Limit: ${pendingPolicyLimit}` }
+            ? { ...a, weeklyLimit: pendingPolicyLimit, autoDrop: pendingAllowanceDrop, role: `Limit: ${pendingPolicyLimit}` }
             : a
         )
       )
@@ -309,6 +258,8 @@ export default function PermissionsTab() {
           account={selectedAccount}
           currentLimit={pendingPolicyLimit}
           onSelectLimit={setPendingPolicyLimit}
+          currentDrop={pendingAllowanceDrop}
+          onSelectDrop={setPendingAllowanceDrop}
           onRequestStepUp={() => setShowStepUpAuth(true)}
           onClose={() => setShowPolicyModal(false)}
         />
@@ -383,18 +334,25 @@ function IssueSubnameWizardSheet({
   onMinted: (name: string) => void
 }) {
   const { colors } = useTheme()
+  const { user } = useAuth()
   const [step, setStep] = useState<SheetStep>('tutorial')
   const [name, setName] = useState('')
   const [perms, setPerms] = useState<PermItem[]>(DEFAULT_PERMS)
   const [editId, setEditId] = useState<string | null>(null)
   const [editVal, setEditVal] = useState('')
 
-  const handleMint = () => {
+  const handleMint = async () => {
     setStep('minting')
-    setTimeout(() => {
+    const rawAddress = user?.address || '0x71C8a27B2f90A2E80562eA9b294D0A38e83f3F9E'
+    const result = await mintGaslessSubname('smithfam.eth', name, rawAddress)
+    
+    if (result.success) {
       setStep('success')
       setTimeout(() => onMinted(name), 2200)
-    }, 1800)
+    } else {
+      console.warn('Mint failed', result.error)
+      setStep('form')
+    }
   }
 
   const togglePerm = (id: string) =>
@@ -976,17 +934,20 @@ function PolicyGuardrailModal({
   account,
   currentLimit,
   onSelectLimit,
+  currentDrop,
+  onSelectDrop,
   onRequestStepUp,
   onClose,
 }: {
   account: SubAccount
   currentLimit: string
   onSelectLimit: (val: string) => void
+  currentDrop: string
+  onSelectDrop: (val: string) => void
   onRequestStepUp: () => void
   onClose: () => void
 }) {
   const { colors } = useTheme()
-  const [allowanceDrop, setAllowanceDrop] = useState(account.autoDrop || '$50 / week')
   const [canSend, setCanSend] = useState(account.canSend !== false)
   const [canEdit, setCanEdit] = useState(account.canEditProfile !== false)
 
@@ -1137,28 +1098,35 @@ function PolicyGuardrailModal({
             >
               Automated Allowance Drops
             </Text>
-            <View
-              style={[
-                styles.autoDropCard,
-                {
-                  backgroundColor: colors.raised,
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              <View style={styles.autoDropRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.autoDropTitle, { color: colors.fg }]}>
-                    Scheduled Drop: Weekly
+            <View style={styles.limitsGrid}>
+              {['None', '$10/week', '$25/week', '$50/month'].map((opt) => (
+                <TouchableOpacity
+                  key={opt}
+                  activeOpacity={0.8}
+                  onPress={() => onSelectDrop(opt)}
+                  style={[
+                    styles.limitPill,
+                    {
+                      backgroundColor:
+                        currentDrop === opt ? colors.accent : colors.raised,
+                      borderColor:
+                        currentDrop === opt ? colors.accent : colors.border,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.limitPillText,
+                      {
+                        color:
+                          currentDrop === opt ? colors.accentFg : colors.fg,
+                      },
+                    ]}
+                  >
+                    {opt}
                   </Text>
-                  <Text style={[styles.autoDropSub, { color: colors.fg3 }]}>
-                    Auto-deposits to {account.ens}
-                  </Text>
-                </View>
-                <Text style={[styles.autoDropValue, { color: '#1DB563' }]}>
-                  {allowanceDrop}
-                </Text>
-              </View>
+                </TouchableOpacity>
+              ))}
             </View>
 
             {/* Parent Enforced Permission Toggles */}

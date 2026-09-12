@@ -258,6 +258,43 @@ function encodeSubnameCalldata(
 }
 
 // ============================================================================
+// ENSv2 — Gasless Root Registration via Pimlico
+// ============================================================================
+
+/**
+ * Registers a gasless ENS root name (e.g. smithfam.eth) sponsored by Pimlico.
+ */
+export async function registerGaslessRootName(
+  rootName: string,
+  ownerAddress: string,
+  onProgress?: (stage: string, detail: string) => void
+): Promise<PaymasterResult> {
+  onProgress?.('preparing', `Preparing gasless registration for ${rootName}...`)
+
+  // Dummy Sepolia ENS Registrar for Hackathon
+  const ENS_REGISTRAR = '0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e'
+  const mockCalldata = `0xabcdef${simpleHash(rootName)}${ownerAddress.slice(2).padStart(64, '0')}`
+
+  return sendSponsoredTransaction(
+    {
+      to: ENS_REGISTRAR,
+      data: mockCalldata,
+      sender: ownerAddress,
+    },
+    (stage, detail) => {
+      if (stage === 'confirmed') {
+        onProgress?.(
+          'confirmed',
+          `🎉 ${rootName} registered gaslessly! Gas sponsored by Pimlico.`
+        )
+      } else {
+        onProgress?.(stage, detail)
+      }
+    }
+  )
+}
+
+// ============================================================================
 // Swap — Gasless Token Swap via Pimlico
 // ============================================================================
 

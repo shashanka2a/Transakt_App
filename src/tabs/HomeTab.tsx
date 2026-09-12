@@ -41,12 +41,8 @@ const nodes = [
     fiat: '$342.80',
     meta: 'Managed by Alex',
     badge: 'ACTIVE',
-    hex: '#1DB563',
-    badgeBg: 'rgba(29,181,99,0.12)',
-    badgeBorder: 'rgba(29,181,99,0.28)',
+    colorKey: 'success',
     Icon: IconCreditCard,
-    iconBg: 'rgba(29,181,99,0.13)',
-    iconColor: '#1DB563',
     bar: 34,
     spent: '$96.20',
     limit: '$250',
@@ -58,12 +54,8 @@ const nodes = [
     fiat: '$3,428.00',
     meta: 'Parent Locked',
     badge: 'LOCKED',
-    hex: '#D4900A',
-    badgeBg: 'rgba(212,144,10,0.12)',
-    badgeBorder: 'rgba(212,144,10,0.28)',
+    colorKey: 'amber',
     Icon: IconGradCap,
-    iconBg: 'rgba(212,144,10,0.13)',
-    iconColor: '#D4900A',
     bar: 88,
     spent: '$3,020.00',
     limit: '$3,500',
@@ -75,12 +67,8 @@ const nodes = [
     fiat: '$114.27',
     meta: 'Refills in 3 days',
     badge: 'AUTO',
-    hex: '#7D8494',
-    badgeBg: 'rgba(125,132,148,0.12)',
-    badgeBorder: 'rgba(125,132,148,0.26)',
+    colorKey: 'fg3',
     Icon: IconRefresh,
-    iconBg: 'rgba(125,132,148,0.12)',
-    iconColor: '#7D8494',
     bar: 12,
     spent: '$14.27',
     limit: '$128',
@@ -474,6 +462,14 @@ function NodeCard({ node }: { node: NodeData }) {
     outputRange: ['0%', '100%'],
   })
 
+  // Extract the actual hex color from the theme based on colorKey
+  const nodeColor = colors[node.colorKey as keyof typeof colors] || colors.accent
+
+  // Generate transparent variants for backgrounds using hex opacity (1E = ~12%, 40 = ~25%)
+  const badgeBg = nodeColor + '1E'
+  const badgeBorder = nodeColor + '40'
+  const iconBg = nodeColor + '20'
+
   return (
     <View
       style={[
@@ -485,19 +481,19 @@ function NodeCard({ node }: { node: NodeData }) {
       ]}
     >
       <View style={styles.nodeCardTop}>
-        <View style={[styles.nodeIconCircle, { backgroundColor: node.iconBg }]}>
-          <node.Icon size={20} color={node.iconColor} />
+        <View style={[styles.nodeIconCircle, { backgroundColor: iconBg }]}>
+          <node.Icon size={20} color={nodeColor} />
         </View>
         <View
           style={[
             styles.nodeBadgePill,
             {
-              backgroundColor: node.badgeBg,
-              borderColor: node.badgeBorder,
+              backgroundColor: badgeBg,
+              borderColor: badgeBorder,
             },
           ]}
         >
-          <Text style={[styles.nodeBadgeText, { color: node.hex }]}>
+          <Text style={[styles.nodeBadgeText, { color: nodeColor }]}>
             {node.badge}
           </Text>
         </View>
@@ -518,7 +514,7 @@ function NodeCard({ node }: { node: NodeData }) {
           <Animated.View
             style={[
               styles.progressFill,
-              { width: barWidth, backgroundColor: node.hex },
+              { width: barWidth, backgroundColor: nodeColor },
             ]}
           />
         </View>

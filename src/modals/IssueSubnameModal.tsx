@@ -12,6 +12,8 @@ import {
 } from 'react-native'
 import Svg, { Path, Rect, Circle } from 'react-native-svg'
 import { useTheme } from '../context/ThemeContext'
+import { useAuth } from '../context/AuthContext'
+import { mintGaslessSubname } from '../services/pimlicoPaymaster'
 
 interface Props {
   onClose: () => void
@@ -55,6 +57,7 @@ type Step = 'compose' | 'minting' | 'done'
 
 export default function IssueSubnameModal({ onClose }: Props) {
   const { colors } = useTheme()
+  const { user } = useAuth()
   const [subname, setSubname] = useState('')
   const [perms, setPerms] = useState<Perm[]>(initPerms)
   const [editId, setEditId] = useState<string | null>(null)
@@ -69,10 +72,19 @@ export default function IssueSubnameModal({ onClose }: Props) {
     )
   }
 
-  const mint = () => {
+  const mint = async () => {
     if (!subname.trim()) return
     setStep('minting')
-    setTimeout(() => setStep('done'), 1800)
+    
+    const rawAddress = user?.address || '0x71C8a27B2f90A2E80562eA9b294D0A38e83f3F9E'
+    const result = await mintGaslessSubname('smithfam.eth', subname, rawAddress)
+    
+    if (result.success) {
+      setStep('done')
+    } else {
+      console.warn('Mint failed', result.error)
+      setStep('compose')
+    }
   }
 
   return (
