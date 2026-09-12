@@ -1,6 +1,7 @@
-import { createPublicClient, http } from 'viem'
+import { createPublicClient, http, formatEther } from 'viem'
 import { normalize } from 'viem/ens'
 import { sepolia } from 'viem/chains'
+import { registerGaslessRootName, mintGaslessSubname } from './pimlicoPaymaster'
 
 // ============================================================================
 // ENSv2 Hackathon Sepolia Deployment Configuration
@@ -116,21 +117,57 @@ export async function checkEnsAvailability(
       const resolved = await resolveEnsAddress(name)
       const available = !resolved
 
-      // Realistic tier-based pricing for root names ($5 - $15/year)
+      const isSub = name.split('.').length > 2
       const label = name.split('.')[0]
-      let usd = 12.0
-      if (label.length <= 3) usd = 640.0
-      else if (label.length === 4) usd = 160.0
-      else if (label.endsWith('fam')) usd = 15.0
+
+      let ethPrice = null
+      let usdPrice = null
+
+      if (available && !isSub) {
+        // Fetch real price from Sepolia ETHRegistrarController
+        const priceData = await ensClient.readContract({
+          address: '0xFED6a969AaA60E4961FCD3EBF1A2e8913ac65B72', // Sepolia Controller
+          abi: [{
+            name: 'rentPrice',
+            type: 'function',
+            stateMutability: 'view',
+            inputs: [
+              { name: 'name', type: 'string' },
+              { name: 'duration', type: 'uint256' }
+            ],
+            outputs: [
+              {
+                name: 'price',
+                type: 'tuple',
+                components: [
+                  { name: 'base', type: 'uint256' },
+                  { name: 'premium', type: 'uint256' }
+                ]
+              }
+            ]
+          }],
+          functionName: 'rentPrice',
+          args: [label, 31536000n], // 1 year in seconds
+        }) as { base: bigint, premium: bigint }
+
+        const totalWei = priceData.base + priceData.premium
+        ethPrice = parseFloat(formatEther(totalWei))
+        usdPrice = ethPrice * ETH_USD
+      } else if (available && isSub) {
+        // Subnames are sponsored/gasless and free to mint in this prototype
+        ethPrice = 0
+        usdPrice = 0
+      }
 
       results.push({
         name,
         available,
-        usdPrice: available ? usd : null,
-        ethPrice: available ? usd / ETH_USD : null,
-        isSubname: name.split('.').length > 2,
+        usdPrice,
+        ethPrice,
+        isSubname: isSub,
       })
-    } catch {
+    } catch (err) {
+      console.warn('Price fetch error:', err)
       results.push({
         name,
         available: true,
@@ -192,7 +229,6 @@ export async function executeEnsRegistration(
         detail: `Requesting Pimlico gas sponsorship for ${cleanName}...`,
       })
 
-      const { mintGaslessSubname } = await import('./pimlicoPaymaster')
       const result = await mintGaslessSubname(
         parentName,
         childLabel,
@@ -238,7 +274,6 @@ export async function executeEnsRegistration(
       detail: 'Verifying Gas Manager sponsorship policy & simulating UserOperation...',
     })
 
-    const { registerGaslessRootName } = await import('./pimlicoPaymaster')
     const result = await registerGaslessRootName(
       cleanName,
       ownerAddress,
