@@ -40,7 +40,7 @@ export default function BiometricModal({
   onConfirm,
   actionType = 'transfer',
   amount = '$50.00',
-  recipient = 'alex.smithfam.eth',
+  recipient = 'alex.hash.eth',
   policyDetails = 'Spend Limit & Policy Update',
 }: BiometricModalProps) {
   const { colors } = useTheme()

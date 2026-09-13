@@ -45,7 +45,7 @@ function AppShell() {
     amount?: string
     recipient?: string
     policyDetails?: string
-  }>({ actionType: 'transfer', amount: '$50.00', recipient: 'alex.smithfam.eth' })
+  }>({ actionType: 'transfer', amount: '$50.00', recipient: 'alex.hash.eth' })
   const [showRequest, setShowRequest] = useState(false)
   const [showSwap, setShowSwap] = useState(false)
 

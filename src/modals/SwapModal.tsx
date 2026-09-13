@@ -106,7 +106,7 @@ export default function SwapModal({ onClose }: Props) {
       ? user.address
       : '0x3F8a92e104dB2D9B387799147D3bEf32A606Ea38'
   const shortAddress = `${rawAddress.slice(0, 6)}...${rawAddress.slice(-4)}`
-  const ensHandle = user?.ensName || 'smithfam.eth'
+  const ensHandle = user?.ensName || 'hash.eth'
 
   // Fetch live ETH balance on mount to keep balances accurate to the Privy Smart Account
   useEffect(() => {

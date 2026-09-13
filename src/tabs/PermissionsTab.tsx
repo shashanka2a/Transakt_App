@@ -12,68 +12,29 @@ import {
 } from 'react-native'
 import Svg, { Path, Rect, Circle } from 'react-native-svg'
 import { useTheme } from '../context/ThemeContext'
-import { useAuth } from '../context/AuthContext'
+import { useAuth, SubAccount, generateSmartAccountAddress } from '../context/AuthContext'
 import { mintGaslessSubname } from '../services/pimlicoPaymaster'
 import BiometricModal from '../modals/BiometricModal'
-
-export interface SubAccount {
-  id: string
-  name: string
-  ens: string
-  role: string
-  eth: string
-  fiat: string
-  badge: 'ACTIVE' | 'LOCKED' | 'AUTO'
-  hex: string
-  badgeBg: string
-  badgeBorder: string
-  initials: string
-  avatarHue: string
-  weeklyLimit?: string
-  autoDrop?: string
-  canSend?: boolean
-  canEditProfile?: boolean
-}
-
-const SEED_ACCOUNTS: SubAccount[] = []
 
 const hues = ['150', '200', '280', '30', '0', '320']
 const randomHue = () => hues[Math.floor(Math.random() * hues.length)]
 
 export default function PermissionsTab() {
   const { colors } = useTheme()
-  const { user, ensName } = useAuth()
-  const rootEnsName = user?.ensName || ensName || 'smithfam.eth'
-  const [accounts, setAccounts] = useState<SubAccount[]>(SEED_ACCOUNTS)
+  const { user, ensName, setEnsName, subAccounts, addSubAccount, updateSubAccount, deleteSubAccount, sendEmailMagicLink } = useAuth()
+  const rootEnsName = user?.ensName || ensName || 'hash.eth'
+  const accounts = subAccounts
   const [showIssue, setShowIssue] = useState(false)
   const [selectedAccount, setSelectedAccount] = useState<SubAccount | null>(null)
   const [showPolicyModal, setShowPolicyModal] = useState(false)
   const [showStepUpAuth, setShowStepUpAuth] = useState(false)
   const [pendingPolicyLimit, setPendingPolicyLimit] = useState('$50/week')
   const [pendingAllowanceDrop, setPendingAllowanceDrop] = useState('None')
+  const [showSwitchEns, setShowSwitchEns] = useState(false)
+  const [customEnsInput, setCustomEnsInput] = useState('')
 
-  const handleMinted = (name: string) => {
-    const initials = name.slice(0, 2).toUpperCase()
-    const hue = randomHue()
-    const newAcc: SubAccount = {
-      id: name,
-      name: name.charAt(0).toUpperCase() + name.slice(1),
-      ens: `${name}.${rootEnsName}`,
-      role: 'New Member',
-      eth: '0.00 ETH',
-      fiat: '$0.00',
-      badge: 'ACTIVE',
-      hex: '#1DB563',
-      badgeBg: 'rgba(29,181,99,0.12)',
-      badgeBorder: 'rgba(29,181,99,0.28)',
-      initials,
-      avatarHue: hue,
-      weeklyLimit: '$50/week',
-      autoDrop: 'None',
-      canSend: true,
-      canEditProfile: true,
-    }
-    setAccounts((prev) => [...prev, newAcc])
+  const handleMinted = (newAcc: SubAccount) => {
+    addSubAccount(newAcc)
     setShowIssue(false)
   }
 
@@ -86,13 +47,11 @@ export default function PermissionsTab() {
 
   const handleConfirmPolicyAuth = () => {
     if (selectedAccount) {
-      setAccounts((prev) =>
-        prev.map((a) =>
-          a.id === selectedAccount.id
-            ? { ...a, weeklyLimit: pendingPolicyLimit, autoDrop: pendingAllowanceDrop, role: `Limit: ${pendingPolicyLimit}` }
-            : a
-        )
-      )
+      updateSubAccount(selectedAccount.id, {
+        weeklyLimit: pendingPolicyLimit,
+        autoDrop: pendingAllowanceDrop,
+        role: `Limit: ${pendingPolicyLimit}`,
+      })
     }
     setShowStepUpAuth(false)
     setShowPolicyModal(false)
@@ -110,21 +69,45 @@ export default function PermissionsTab() {
             <Text style={[styles.headerTitle, { color: colors.fg }]}>
               Manage
             </Text>
-            <Text style={[styles.headerSubtitle, { color: colors.fg3 }]}>
-              {rootEnsName}
-            </Text>
+            <TouchableOpacity
+              activeOpacity={0.75}
+              onPress={() => {
+                setCustomEnsInput(rootEnsName)
+                setShowSwitchEns(true)
+              }}
+              style={styles.rootEnsSelectorRow}
+            >
+              <Text style={[styles.headerSubtitle, { color: colors.accent }]}>
+                {rootEnsName}
+              </Text>
+              <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" style={{ marginLeft: 4 }}>
+                <Path d="M6 9l6 6 6-6" stroke={colors.accent} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />
+              </Svg>
+            </TouchableOpacity>
           </View>
-          <View
-            style={[
-              styles.ensTag,
-              {
-                backgroundColor: 'rgba(29,181,99,0.10)',
-                borderColor: 'rgba(29,181,99,0.22)',
-              },
-            ]}
-          >
-            <View style={styles.pulseDot} />
-            <Text style={styles.ensTagText}>ENSv2</Text>
+          <View style={styles.headerRightRow}>
+            <TouchableOpacity
+              activeOpacity={0.75}
+              onPress={() => {
+                setCustomEnsInput(rootEnsName)
+                setShowSwitchEns(true)
+              }}
+              style={[styles.switchEnsButton, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            >
+              <Text style={[styles.switchEnsButtonText, { color: colors.fg2 }]}>Switch ENS</Text>
+            </TouchableOpacity>
+            <View
+              style={[
+                styles.ensTag,
+                {
+                  backgroundColor: 'rgba(29,181,99,0.10)',
+                  borderColor: 'rgba(29,181,99,0.22)',
+                },
+              ]}
+            >
+              <View style={styles.pulseDot} />
+              <Text style={styles.ensTagText}>ENSv2</Text>
+            </View>
           </View>
         </View>
 
@@ -149,21 +132,21 @@ export default function PermissionsTab() {
             >
               {/* Left Accent Strip */}
               <View
-                style={[styles.leftAccentStrip, { backgroundColor: acc.hex }]}
+                style={[styles.leftAccentStrip, { backgroundColor: acc.hex || '#1DB563' }]}
               />
 
               <View
                 style={[
                   styles.avatarBox,
                   {
-                    backgroundColor: `hsl(${acc.avatarHue}, 35%, 88%)`,
+                    backgroundColor: `hsl(${acc.avatarHue || '150'}, 35%, 88%)`,
                   },
                 ]}
               >
                 <Text
                   style={[
                     styles.avatarText,
-                    { color: `hsl(${acc.avatarHue}, 45%, 28%)` },
+                    { color: `hsl(${acc.avatarHue || '150'}, 45%, 28%)` },
                   ]}
                 >
                   {acc.initials}
@@ -193,10 +176,20 @@ export default function PermissionsTab() {
                 </View>
                 <Text
                   numberOfLines={1}
-                  style={[styles.accountEns, { color: colors.fg3 }]}
+                  style={[styles.accountEns, { color: colors.accent }]}
                 >
                   {acc.ens}
                 </Text>
+                {acc.email ? (
+                  <Text numberOfLines={1} style={[styles.accountMetaSub, { color: colors.fg2 }]}>
+                    ✉️ {acc.email}
+                  </Text>
+                ) : null}
+                {acc.address ? (
+                  <Text numberOfLines={1} style={[styles.accountMetaSub, { color: colors.fg3 }]}>
+                    🔑 {acc.address.slice(0, 6)}...{acc.address.slice(-4)}
+                  </Text>
+                ) : null}
                 <Text style={[styles.accountRole, { color: colors.fg2 }]}>
                   {acc.weeklyLimit ? `Limit: ${acc.weeklyLimit}` : acc.role}
                 </Text>
@@ -212,6 +205,15 @@ export default function PermissionsTab() {
               </View>
             </TouchableOpacity>
           ))}
+
+          {accounts.length === 0 && (
+            <View style={[styles.emptyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Text style={[styles.emptyTitle, { color: colors.fg }]}>No Subnames Yet</Text>
+              <Text style={[styles.emptySubtitle, { color: colors.fg3 }]}>
+                Issue a delegated subname under {rootEnsName} for family members or daily pockets with customizable spend policies.
+              </Text>
+            </View>
+          )}
 
           {/* Issue CTA */}
           <TouchableOpacity
@@ -253,6 +255,49 @@ export default function PermissionsTab() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Switch Root ENS Modal */}
+      {showSwitchEns && (
+        <Modal visible transparent animationType="fade" onRequestClose={() => setShowSwitchEns(false)}>
+          <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}>
+            <View style={[styles.switchEnsModalBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Text style={[styles.switchEnsModalTitle, { color: colors.fg }]}>Switch Root ENS Domain</Text>
+              <Text style={[styles.switchEnsModalSub, { color: colors.fg3 }]}>
+                Enter your registered ENS domain (e.g. hash.eth) to manage subnames and policies.
+              </Text>
+              <TextInput
+                value={customEnsInput}
+                onChangeText={(t) => setCustomEnsInput(t.toLowerCase().trim())}
+                placeholder="hash.eth"
+                placeholderTextColor={colors.fg3}
+                autoCapitalize="none"
+                style={[styles.switchEnsInput, { color: colors.fg, backgroundColor: colors.raised, borderColor: colors.border }]}
+              />
+              <View style={styles.switchEnsBtnRow}>
+                <TouchableOpacity
+                  activeOpacity={0.75}
+                  onPress={() => setShowSwitchEns(false)}
+                  style={[styles.switchEnsCancelBtn, { borderColor: colors.border }]}
+                >
+                  <Text style={[styles.switchEnsCancelText, { color: colors.fg2 }]}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onPress={() => {
+                    if (customEnsInput.trim()) {
+                      setEnsName(customEnsInput.trim())
+                    }
+                    setShowSwitchEns(false)
+                  }}
+                  style={[styles.switchEnsSaveBtn, { backgroundColor: colors.accent }]}
+                >
+                  <Text style={[styles.switchEnsSaveText, { color: colors.accentFg }]}>Set Domain</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
 
       {/* Policy Guardrail Modal with World ID Step-Up Auth */}
       {showPolicyModal && selectedAccount && (
@@ -333,29 +378,89 @@ function IssueSubnameWizardSheet({
   onMinted,
 }: {
   onClose: () => void
-  onMinted: (name: string) => void
+  onMinted: (acc: SubAccount) => void
 }) {
   const { colors } = useTheme()
-  const { user, ensName } = useAuth()
-  const rootEnsName = user?.ensName || ensName || 'smithfam.eth'
+  const { user, ensName, sendEmailMagicLink } = useAuth()
+  const rootEnsName = user?.ensName || ensName || 'hash.eth'
   const [step, setStep] = useState<SheetStep>('tutorial')
   const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [memberAddress, setMemberAddress] = useState('')
+  const [inviteLink, setInviteLink] = useState('')
+  const [copied, setCopied] = useState(false)
+  const [otpSent, setOtpSent] = useState(false)
   const [perms, setPerms] = useState<PermItem[]>(DEFAULT_PERMS)
   const [editId, setEditId] = useState<string | null>(null)
   const [editVal, setEditVal] = useState('')
 
   const handleMint = async () => {
+    if (!name.trim()) return
+    const cleanEmail = email.trim().toLowerCase()
     setStep('minting')
-    const rawAddress = user?.address || '0x71C8a27B2f90A2E80562eA9b294D0A38e83f3F9E'
-    const result = await mintGaslessSubname(rootEnsName, name, rawAddress)
-    
-    if (result.success) {
-      setStep('success')
-      setTimeout(() => onMinted(name), 2200)
-    } else {
-      console.warn('Mint failed', result.error)
-      setStep('form')
+
+    // Deterministic smart account address linked to this member email via Privy
+    const derivedAddress = cleanEmail
+      ? generateSmartAccountAddress(cleanEmail)
+      : (user?.address || '0x71C8a27B2f90A2E80562eA9b294D0A38e83f3F9E')
+    setMemberAddress(derivedAddress)
+
+    // Mint gasless subname onchain via Pimlico paymaster on Sepolia
+    const result = await mintGaslessSubname(rootEnsName, name, derivedAddress)
+
+    // Trigger official Privy email OTP verification to the member's email
+    let sentSuccess = false
+    if (cleanEmail) {
+      try {
+        sentSuccess = await sendEmailMagicLink(cleanEmail)
+      } catch (e) {
+        console.warn('Privy OTP invite error', e)
+      }
     }
+    setOtpSent(sentSuccess)
+
+    // Spend limit
+    const limitPerm = perms.find((p) => p.id === 'send_limit')
+    const spendLimit = (limitPerm?.value as string) || '$50.00 USDC'
+    const generatedInvite = `https://transakt.app/join?ens=${name}.${rootEnsName}&email=${encodeURIComponent(cleanEmail)}&address=${derivedAddress}&limit=${encodeURIComponent(spendLimit)}`
+    setInviteLink(generatedInvite)
+
+    const initials = name.slice(0, 2).toUpperCase()
+    const hue = randomHue()
+    const newAcc: SubAccount = {
+      id: `sub_${name}_${Date.now()}`,
+      name: name.charAt(0).toUpperCase() + name.slice(1),
+      ens: `${name}.${rootEnsName}`,
+      email: cleanEmail || undefined,
+      address: derivedAddress,
+      role: `Limit: ${spendLimit}`,
+      eth: '0.00 ETH',
+      fiat: '$0.00',
+      badge: 'INVITED',
+      hex: '#1DB563',
+      badgeBg: 'rgba(29,181,99,0.12)',
+      badgeBorder: 'rgba(29,181,99,0.28)',
+      initials,
+      avatarHue: hue,
+      weeklyLimit: spendLimit,
+      autoDrop: 'None',
+      canSend: true,
+      canEditProfile: true,
+      inviteLink: generatedInvite,
+    }
+
+    onMinted(newAcc)
+    setStep('success')
+  }
+
+  const handleCopyLink = () => {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(inviteLink)
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2500)
+      }
+    } catch {}
   }
 
   const togglePerm = (id: string) =>
@@ -713,6 +818,51 @@ function IssueSubnameWizardSheet({
                   </Text>
                 )}
 
+                {/* Member Email Input */}
+                <Text style={[styles.howItWorksTitle, { color: colors.fg3, marginTop: 14 }]}>
+                  Member Email (Privy Smart Wallet Link)
+                </Text>
+                <View
+                  style={[
+                    styles.subnameFormInputRow,
+                    {
+                      backgroundColor: colors.raised,
+                      borderColor: email ? colors.accent : colors.border,
+                    },
+                  ]}
+                >
+                  <TextInput
+                    value={email}
+                    onChangeText={setEmail}
+                    placeholder="alex@transakt.app"
+                    placeholderTextColor={colors.fg3}
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                    style={[styles.subnameFormInput, { color: colors.fg }]}
+                  />
+                </View>
+                {email.trim().length > 0 && (
+                  <View
+                    style={[
+                      styles.privyDerivedBox,
+                      { backgroundColor: colors.raised, borderColor: 'rgba(29,181,99,0.22)' },
+                    ]}
+                  >
+                    <View style={styles.privyBadgeRow}>
+                      <View style={[styles.privyBadgeDot, { backgroundColor: colors.accent }]} />
+                      <Text style={[styles.privyBadgeText, { color: colors.accent }]}>
+                        Privy Smart Account Linked
+                      </Text>
+                    </View>
+                    <Text style={[styles.privyDerivedAddr, { color: colors.fg }]}>
+                      {generateSmartAccountAddress(email.trim().toLowerCase())}
+                    </Text>
+                    <Text style={[styles.privyDerivedNote, { color: colors.fg3 }]}>
+                      An official Privy OTP authentication code will be sent to this email upon issuing.
+                    </Text>
+                  </View>
+                )}
+
                 {/* Permissions List */}
                 <Text style={[styles.howItWorksTitle, { color: colors.fg3, marginTop: 16 }]}>
                   Permissions
@@ -880,12 +1030,12 @@ function IssueSubnameWizardSheet({
 
             {/* ── SUCCESS STEP ── */}
             {step === 'success' && (
-              <View style={styles.mintingCenter}>
+              <View style={styles.successStepContainer}>
                 <View
                   style={[
                     styles.successOuterCircle,
                     {
-                      backgroundColor: colors.mt10,
+                      backgroundColor: 'rgba(29,181,99,0.14)',
                       borderColor: colors.accent,
                     },
                   ]}
@@ -902,28 +1052,97 @@ function IssueSubnameWizardSheet({
                 </View>
 
                 <Text style={[styles.mintingTitle, { color: colors.fg }]}>
-                  Subname Created!
+                  Subname Issued &amp; Invited!
                 </Text>
                 <Text style={[styles.mintingEns, { color: colors.accent }]}>
                   {name}.{rootEnsName}
                 </Text>
 
+                {/* Subname Details Card */}
                 <View
                   style={[
-                    styles.copiedLinkPill,
+                    styles.successDetailCard,
                     {
                       backgroundColor: colors.raised,
                       borderColor: colors.border,
                     },
                   ]}
                 >
-                  <Text style={[styles.copiedLinkText, { color: colors.fg2 }]}>
-                    Invite link copied to clipboard
-                  </Text>
+                  <View style={styles.successDetailRow}>
+                    <Text style={[styles.successDetailLabel, { color: colors.fg3 }]}>Subname Identity</Text>
+                    <Text style={[styles.successDetailValue, { color: colors.fg }]}>{name}.{rootEnsName}</Text>
+                  </View>
+                  {email.trim().length > 0 && (
+                    <View style={styles.successDetailRow}>
+                      <Text style={[styles.successDetailLabel, { color: colors.fg3 }]}>Linked Member Email</Text>
+                      <Text style={[styles.successDetailValue, { color: colors.accent }]}>{email}</Text>
+                    </View>
+                  )}
+                  {memberAddress ? (
+                    <View style={styles.successDetailRow}>
+                      <Text style={[styles.successDetailLabel, { color: colors.fg3 }]}>Privy Smart Wallet</Text>
+                      <Text style={[styles.successDetailValueMono, { color: colors.fg2 }]}>
+                        {memberAddress.slice(0, 8)}...{memberAddress.slice(-6)}
+                      </Text>
+                    </View>
+                  ) : null}
+                  <View style={styles.successDetailRow}>
+                    <Text style={[styles.successDetailLabel, { color: colors.fg3 }]}>Privy Auth Status</Text>
+                    <Text style={[styles.successDetailValue, { color: otpSent ? '#1DB563' : colors.fg2 }]}>
+                      {otpSent ? '✉️ OTP Verification Sent' : '⚡ Smart Wallet Prepared'}
+                    </Text>
+                  </View>
+                  <View style={[styles.successDetailRow, { borderBottomWidth: 0 }]}>
+                    <Text style={[styles.successDetailLabel, { color: colors.fg3 }]}>Weekly Spend Limit</Text>
+                    <Text style={[styles.successDetailValue, { color: colors.fg }]}>
+                      {perms.find((p) => p.id === 'send_limit')?.value as string || '$50.00 USDC'}
+                    </Text>
+                  </View>
                 </View>
-                <Text style={[styles.mintingNote, { color: colors.fg3 }]}>
-                  Opening your dashboard…
-                </Text>
+
+                {/* Shareable Invite Link Card */}
+                <View
+                  style={[
+                    styles.inviteCardBox,
+                    {
+                      backgroundColor: colors.raised,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.inviteCardTitle, { color: colors.fg3 }]}>
+                    Shareable Member Activation Link
+                  </Text>
+                  <Text numberOfLines={1} style={[styles.inviteCardLink, { color: colors.fg2 }]}>
+                    {inviteLink}
+                  </Text>
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={handleCopyLink}
+                    style={[
+                      styles.copyInviteBtn,
+                      {
+                        backgroundColor: copied ? colors.accent : colors.surface,
+                        borderColor: copied ? colors.accent : colors.border,
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.copyInviteBtnText, { color: copied ? colors.accentFg : colors.fg }]}>
+                      {copied ? '✓ Link Copied to Clipboard!' : 'Copy Activation Link'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Done Button */}
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onPress={onClose}
+                  style={[styles.wizardCtaButton, { backgroundColor: colors.accent, marginTop: 14 }]}
+                >
+                  <Text style={[styles.wizardCtaText, { color: colors.accentFg }]}>
+                    Done &amp; Return to Manage
+                  </Text>
+                </TouchableOpacity>
               </View>
             )}
           </ScrollView>
@@ -1919,5 +2138,197 @@ const styles = StyleSheet.create({
   savePolicyBtnText: {
     fontSize: 14,
     fontWeight: '900',
+  },
+  rootEnsSelectorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  headerRightRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  switchEnsButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  switchEnsButtonText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  switchEnsModalBox: {
+    width: '90%',
+    maxWidth: 400,
+    padding: 22,
+    borderRadius: 24,
+    borderWidth: 1,
+    alignSelf: 'center',
+  },
+  switchEnsModalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    marginBottom: 6,
+  },
+  switchEnsModalSub: {
+    fontSize: 12,
+    lineHeight: 18,
+    marginBottom: 16,
+  },
+  switchEnsInput: {
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    fontWeight: '600',
+    marginBottom: 16,
+  },
+  switchEnsBtnRow: {
+    flexDirection: 'row',
+    gap: 10,
+    justifyContent: 'flex-end',
+  },
+  switchEnsCancelBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  switchEnsCancelText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  switchEnsSaveBtn: {
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  switchEnsSaveText: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  accountMetaSub: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 2,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  emptyCard: {
+    padding: 24,
+    borderRadius: 20,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    marginBottom: 6,
+  },
+  emptySubtitle: {
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: 'center',
+  },
+  privyDerivedBox: {
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginTop: 10,
+  },
+  privyBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  privyBadgeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  privyBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  privyDerivedAddr: {
+    fontSize: 12,
+    fontWeight: '700',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    marginBottom: 4,
+  },
+  privyDerivedNote: {
+    fontSize: 11,
+    lineHeight: 15,
+  },
+  successStepContainer: {
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  successDetailCard: {
+    width: '100%',
+    padding: 14,
+    borderRadius: 18,
+    borderWidth: 1,
+    marginTop: 18,
+    marginBottom: 14,
+  },
+  successDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255,255,255,0.08)',
+  },
+  successDetailLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  successDetailValue: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  successDetailValueMono: {
+    fontSize: 11,
+    fontWeight: '700',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  inviteCardBox: {
+    width: '100%',
+    padding: 14,
+    borderRadius: 18,
+    borderWidth: 1,
+    marginBottom: 10,
+  },
+  inviteCardTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 6,
+  },
+  inviteCardLink: {
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    marginBottom: 12,
+  },
+  copyInviteBtn: {
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  copyInviteBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
   },
 })

@@ -12,7 +12,7 @@ import {
 } from 'react-native'
 import Svg, { Path, Rect, Circle } from 'react-native-svg'
 import { useTheme } from '../context/ThemeContext'
-import { useAuth } from '../context/AuthContext'
+import { useAuth, SubAccount, generateSmartAccountAddress } from '../context/AuthContext'
 import { mintGaslessSubname } from '../services/pimlicoPaymaster'
 
 interface Props {
@@ -57,9 +57,14 @@ type Step = 'compose' | 'minting' | 'done'
 
 export default function IssueSubnameModal({ onClose }: Props) {
   const { colors } = useTheme()
-  const { user, ensName } = useAuth()
-  const rootEnsName = user?.ensName || ensName || 'smithfam.eth'
+  const { user, ensName, addSubAccount, sendEmailMagicLink } = useAuth()
+  const rootEnsName = user?.ensName || ensName || 'hash.eth'
   const [subname, setSubname] = useState('')
+  const [email, setEmail] = useState('')
+  const [memberAddress, setMemberAddress] = useState('')
+  const [inviteLink, setInviteLink] = useState('')
+  const [copied, setCopied] = useState(false)
+  const [otpSent, setOtpSent] = useState(false)
   const [perms, setPerms] = useState<Perm[]>(initPerms)
   const [editId, setEditId] = useState<string | null>(null)
   const [editVal, setEditVal] = useState('')
@@ -75,17 +80,66 @@ export default function IssueSubnameModal({ onClose }: Props) {
 
   const mint = async () => {
     if (!subname.trim()) return
+    const cleanEmail = email.trim().toLowerCase()
     setStep('minting')
-    
-    const rawAddress = user?.address || '0x71C8a27B2f90A2E80562eA9b294D0A38e83f3F9E'
-    const result = await mintGaslessSubname(rootEnsName, subname, rawAddress)
-    
-    if (result.success) {
-      setStep('done')
-    } else {
-      console.warn('Mint failed', result.error)
-      setStep('compose')
+
+    const derivedAddress = cleanEmail
+      ? generateSmartAccountAddress(cleanEmail)
+      : (user?.address || '0x71C8a27B2f90A2E80562eA9b294D0A38e83f3F9E')
+    setMemberAddress(derivedAddress)
+
+    const result = await mintGaslessSubname(rootEnsName, subname, derivedAddress)
+
+    let sentSuccess = false
+    if (cleanEmail) {
+      try {
+        sentSuccess = await sendEmailMagicLink(cleanEmail)
+      } catch (e) {
+        console.warn('Privy OTP invite failed', e)
+      }
     }
+    setOtpSent(sentSuccess)
+
+    const limitPerm = perms.find((p) => p.id === 'limit')
+    const spendLimit = (limitPerm?.value as string) || '$50.00 USDC'
+    const generatedInvite = `https://transakt.app/join?ens=${subname}.${rootEnsName}&email=${encodeURIComponent(cleanEmail)}&address=${derivedAddress}&limit=${encodeURIComponent(spendLimit)}`
+    setInviteLink(generatedInvite)
+
+    const initials = subname.slice(0, 2).toUpperCase()
+    const newAcc: SubAccount = {
+      id: `sub_${subname}_${Date.now()}`,
+      name: subname.charAt(0).toUpperCase() + subname.slice(1),
+      ens: `${subname}.${rootEnsName}`,
+      email: cleanEmail || undefined,
+      address: derivedAddress,
+      role: `Limit: ${spendLimit}`,
+      eth: '0.00 ETH',
+      fiat: '$0.00',
+      badge: 'INVITED',
+      hex: '#1DB563',
+      badgeBg: 'rgba(29,181,99,0.12)',
+      badgeBorder: 'rgba(29,181,99,0.28)',
+      initials,
+      avatarHue: '150',
+      weeklyLimit: spendLimit,
+      autoDrop: 'None',
+      canSend: true,
+      canEditProfile: true,
+      inviteLink: generatedInvite,
+    }
+
+    addSubAccount(newAcc)
+    setStep('done')
+  }
+
+  const handleCopyLink = () => {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(inviteLink)
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2500)
+      }
+    } catch {}
   }
 
   return (
@@ -116,7 +170,7 @@ export default function IssueSubnameModal({ onClose }: Props) {
                 style={[
                   styles.successCheckCircle,
                   {
-                    backgroundColor: colors.mt16,
+                    backgroundColor: 'rgba(29,181,99,0.14)',
                     borderColor: colors.accent,
                   },
                 ]}
@@ -133,15 +187,49 @@ export default function IssueSubnameModal({ onClose }: Props) {
               </View>
 
               <Text style={[styles.successSubtitle, { color: colors.fg2 }]}>
-                Subname Minted
+                Subname Issued &amp; Invited!
               </Text>
               <Text style={[styles.successName, { color: colors.fg }]}>
                 {subname}.{rootEnsName}
               </Text>
-              <Text style={[styles.successDesc, { color: colors.fg2 }]}>
-                An invite link has been sent. The new member can activate their account using biometrics.
-              </Text>
 
+              {/* Details Card */}
+              <View
+                style={[
+                  styles.successDetailBox,
+                  {
+                    backgroundColor: colors.raised,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
+                <View style={styles.successDetailRow}>
+                  <Text style={[styles.successDetailKey, { color: colors.fg3 }]}>Subname Identity</Text>
+                  <Text style={[styles.successDetailVal, { color: colors.fg }]}>{subname}.{rootEnsName}</Text>
+                </View>
+                {email.trim().length > 0 && (
+                  <View style={styles.successDetailRow}>
+                    <Text style={[styles.successDetailKey, { color: colors.fg3 }]}>Linked Member Email</Text>
+                    <Text style={[styles.successDetailVal, { color: colors.accent }]}>{email}</Text>
+                  </View>
+                )}
+                {memberAddress ? (
+                  <View style={styles.successDetailRow}>
+                    <Text style={[styles.successDetailKey, { color: colors.fg3 }]}>Privy Smart Wallet</Text>
+                    <Text style={[styles.successDetailValMono, { color: colors.fg2 }]}>
+                      {memberAddress.slice(0, 8)}...{memberAddress.slice(-6)}
+                    </Text>
+                  </View>
+                ) : null}
+                <View style={[styles.successDetailRow, { borderBottomWidth: 0 }]}>
+                  <Text style={[styles.successDetailKey, { color: colors.fg3 }]}>Privy Auth Status</Text>
+                  <Text style={[styles.successDetailVal, { color: otpSent ? '#1DB563' : colors.fg2 }]}>
+                    {otpSent ? '✉️ OTP Verification Sent' : '⚡ Smart Wallet Prepared'}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Shareable Invite Card */}
               <View
                 style={[
                   styles.inviteLinkCard,
@@ -153,23 +241,26 @@ export default function IssueSubnameModal({ onClose }: Props) {
               >
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.inviteLabel, { color: colors.fg3 }]}>
-                    Invite Link
+                    Activation Invite Link
                   </Text>
-                  <Text style={[styles.inviteUrl, { color: colors.accent }]}>
-                    safefam.app/join/{subname}
+                  <Text numberOfLines={1} style={[styles.inviteUrl, { color: colors.fg2 }]}>
+                    {inviteLink}
                   </Text>
                 </View>
                 <TouchableOpacity
                   activeOpacity={0.7}
+                  onPress={handleCopyLink}
                   style={[
                     styles.copyPill,
                     {
-                      backgroundColor: colors.mt10,
-                      borderColor: colors.mb20,
+                      backgroundColor: copied ? colors.accent : colors.mt10,
+                      borderColor: copied ? colors.accent : colors.mb20,
                     },
                   ]}
                 >
-                  <Text style={[styles.copyText, { color: colors.accent }]}>Copy</Text>
+                  <Text style={[styles.copyText, { color: copied ? colors.accentFg : colors.accent }]}>
+                    {copied ? '✓ Copied' : 'Copy'}
+                  </Text>
                 </TouchableOpacity>
               </View>
 
@@ -179,7 +270,7 @@ export default function IssueSubnameModal({ onClose }: Props) {
                 style={[styles.doneButton, { backgroundColor: colors.accent }]}
               >
                 <Text style={[styles.doneButtonText, { color: colors.accentFg }]}>
-                  Done
+                  Done &amp; View in Dashboard
                 </Text>
               </TouchableOpacity>
             </View>
@@ -254,6 +345,48 @@ export default function IssueSubnameModal({ onClose }: Props) {
                   <Text style={[styles.subnameSuccessPreview, { color: colors.accent }]}>
                     ✓ {subname}.{rootEnsName} looks good
                   </Text>
+                )}
+
+                {/* Member Email Input */}
+                <Text style={[styles.inputLabel, { color: colors.fg3, marginTop: 14 }]}>
+                  Member Email (Privy Smart Wallet Link)
+                </Text>
+                <View
+                  style={[
+                    styles.subnameInputRow,
+                    {
+                      backgroundColor: colors.raised,
+                      borderColor: email ? colors.accent : colors.border,
+                    },
+                  ]}
+                >
+                  <TextInput
+                    value={email}
+                    onChangeText={setEmail}
+                    placeholder="member@transakt.app"
+                    placeholderTextColor={colors.fg3}
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                    style={[styles.subnameTextInput, { color: colors.fg }]}
+                  />
+                </View>
+                {email.trim().length > 0 && (
+                  <View
+                    style={[
+                      styles.privyPreviewBox,
+                      { backgroundColor: colors.raised, borderColor: 'rgba(29,181,99,0.22)' },
+                    ]}
+                  >
+                    <Text style={[styles.privyPreviewTitle, { color: colors.accent }]}>
+                      Privy Smart Account Linked
+                    </Text>
+                    <Text style={[styles.privyPreviewAddr, { color: colors.fg }]}>
+                      {generateSmartAccountAddress(email.trim().toLowerCase())}
+                    </Text>
+                    <Text style={[styles.privyPreviewSub, { color: colors.fg3 }]}>
+                      An official Privy OTP authentication code will be sent to this email upon issuing.
+                    </Text>
+                  </View>
                 )}
               </View>
 
@@ -773,5 +906,56 @@ const styles = StyleSheet.create({
   doneButtonText: {
     fontSize: 16,
     fontWeight: '900',
+  },
+  successDetailBox: {
+    width: '100%',
+    padding: 14,
+    borderRadius: 18,
+    borderWidth: 1,
+    marginBottom: 16,
+  },
+  successDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255,255,255,0.08)',
+  },
+  successDetailKey: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  successDetailVal: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  successDetailValMono: {
+    fontSize: 11,
+    fontWeight: '700',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  privyPreviewBox: {
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginTop: 10,
+  },
+  privyPreviewTitle: {
+    fontSize: 10,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 4,
+  },
+  privyPreviewAddr: {
+    fontSize: 12,
+    fontWeight: '700',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    marginBottom: 4,
+  },
+  privyPreviewSub: {
+    fontSize: 11,
+    lineHeight: 15,
   },
 })

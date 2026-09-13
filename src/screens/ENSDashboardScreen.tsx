@@ -34,7 +34,7 @@ interface Props {
 
 export default function ENSDashboardScreen({ onEnterApp }: Props) {
   const { theme, colors, toggle } = useTheme()
-  const { user, ensName } = useAuth()
+  const { user, ensName, subAccounts } = useAuth()
   const [showIssue, setShowIssue] = useState(false)
   const [dropdown, setDropdown] = useState(false)
   const [liveBalance, setLiveBalance] = useState<number | null>(null)
@@ -43,49 +43,21 @@ export default function ENSDashboardScreen({ onEnterApp }: Props) {
     user?.address && isValidEthereumAddress(user.address)
       ? user.address
       : '0x71C8a27B2f90A2E80562eA9b294D0A38e83f3F9E'
-  const activeEns = user?.ensName || ensName || 'smithfam.eth'
+  const activeEns = user?.ensName || ensName || 'hash.eth'
 
-  const subnodes = [
-    {
-      id: 'pay',
-      ens: `pay.${activeEns}`,
-      label: 'Daily Pocket',
-      eth: '0.12 ETH',
-      fiat: '$342.80',
-      badge: 'ACTIVE' as const,
-      hex: '#00FF87',
-      Icon: IconCreditCard,
-      iconBg: 'rgba(0,255,135,0.12)',
-      iconColor: '#00FF87',
-      holder: 'Alex · Teen',
-    },
-    {
-      id: 'vault',
-      ens: `vault.${activeEns}`,
-      label: 'Savings',
-      eth: '1.20 ETH',
-      fiat: '$3,428.00',
-      badge: 'LOCKED' as const,
-      hex: '#FFB830',
-      Icon: IconGradCap,
-      iconBg: 'rgba(255,184,48,0.12)',
-      iconColor: '#FFB830',
-      holder: 'Parent Controlled',
-    },
-    {
-      id: 'allow',
-      ens: `allow.${activeEns}`,
-      label: 'Allowance',
-      eth: '0.04 ETH',
-      fiat: '$114.27',
-      badge: 'AUTO' as const,
-      hex: '#8E95A5',
-      Icon: IconRefresh,
-      iconBg: 'rgba(142,149,165,0.12)',
-      iconColor: '#8E95A5',
-      holder: 'Auto-refill · Monthly',
-    },
-  ]
+  const subnodes = subAccounts.map((acc) => ({
+    id: acc.id,
+    ens: acc.ens,
+    label: acc.name,
+    eth: acc.eth || '0.00 ETH',
+    fiat: acc.fiat || '$0.00',
+    badge: acc.badge,
+    hex: acc.hex || '#00FF87',
+    Icon: acc.badge === 'LOCKED' ? IconGradCap : IconCreditCard,
+    iconBg: acc.badgeBg || 'rgba(0,255,135,0.12)',
+    iconColor: acc.hex || '#00FF87',
+    holder: acc.email ? `Linked: ${acc.email}` : (acc.weeklyLimit ? `Limit: ${acc.weeklyLimit}` : acc.role),
+  }))
 
   useEffect(() => {
     let isMounted = true

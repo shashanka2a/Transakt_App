@@ -38,7 +38,7 @@ interface Props {
 export default function SendTab({ onReview, onBack }: Props) {
   const { colors } = useTheme()
   const { user, ensName } = useAuth()
-  const rootEnsName = user?.ensName || ensName || 'smithfam.eth'
+  const rootEnsName = user?.ensName || ensName || 'hash.eth'
   const [query, setQuery] = useState('')
   const [resolved, setResolved] = useState(false)
   const [resolvedAddr, setResolvedAddr] = useState<string | null>(null)

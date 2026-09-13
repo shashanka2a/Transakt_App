@@ -87,7 +87,7 @@ export default function HomeTab({
   onOpenSwap,
 }: Props) {
   const { theme, colors, toggle } = useTheme()
-  const { user } = useAuth()
+  const { user, ensName, subAccounts } = useAuth()
   const [liveBalance, setLiveBalance] = useState<number | null>(null)
   const [liveTransfers, setLiveTransfers] = useState<OnchainTransfer[]>([])
   const [isLoadingTransfers, setIsLoadingTransfers] = useState(false)
@@ -96,7 +96,7 @@ export default function HomeTab({
     user?.address && isValidEthereumAddress(user.address)
       ? user.address
       : '0x71C8a27B2f90A2E80562eA9b294D0A38e83f3F9E'
-  const activeEns = user?.ensName || 'smithfam.eth'
+  const activeEns = user?.ensName || ensName || 'hash.eth'
 
   // 1. Fetch actual live onchain balance
   useEffect(() => {
@@ -291,8 +291,23 @@ export default function HomeTab({
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.horizontalNodesScroll}
           >
-            {nodes.map((node) => (
-              <NodeCard key={node.id} node={node} />
+            {subAccounts.map((acc) => (
+              <NodeCard
+                key={acc.id}
+                node={{
+                  id: acc.id,
+                  name: acc.name,
+                  eth: acc.eth || '0.00 ETH',
+                  fiat: acc.fiat || '$0.00',
+                  meta: acc.email ? `✉️ ${acc.email}` : (acc.weeklyLimit ? `Limit: ${acc.weeklyLimit}` : acc.role),
+                  badge: (acc.badge === 'INVITED' ? 'ACTIVE' : acc.badge) as any,
+                  colorKey: acc.badge === 'LOCKED' ? 'amber' : 'success',
+                  Icon: acc.badge === 'LOCKED' ? IconGradCap : IconCreditCard,
+                  bar: acc.badge === 'LOCKED' ? 88 : 34,
+                  spent: '$0.00',
+                  limit: acc.weeklyLimit || '$250',
+                }}
+              />
             ))}
           </ScrollView>
         </View>

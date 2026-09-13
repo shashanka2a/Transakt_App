@@ -10,9 +10,32 @@ export interface UserSession {
   isEmbeddedWallet: boolean
 }
 
+export interface SubAccount {
+  id: string
+  name: string
+  ens: string
+  email?: string
+  address?: string
+  role: string
+  eth: string
+  fiat: string
+  badge: 'ACTIVE' | 'LOCKED' | 'AUTO' | 'INVITED'
+  hex: string
+  badgeBg: string
+  badgeBorder: string
+  initials: string
+  avatarHue: string
+  weeklyLimit?: string
+  autoDrop?: string
+  canSend?: boolean
+  canEditProfile?: boolean
+  inviteLink?: string
+}
+
 interface AuthContextType {
   user: UserSession | null
   ensName: string
+  subAccounts: SubAccount[]
   isAuthenticated: boolean
   isLoading: boolean
   error: string | null
@@ -22,15 +45,37 @@ interface AuthContextType {
   verifyEmailOtp: (code: string) => Promise<boolean>
   connectExternalWallet: (type: 'metamask' | 'walletconnect') => Promise<boolean>
   setEnsName: (ensName: string) => void
+  addSubAccount: (account: SubAccount) => void
+  updateSubAccount: (id: string, updates: Partial<SubAccount>) => void
+  deleteSubAccount: (id: string) => void
   logout: () => void
   privyAppId: string
 }
 
 const DEFAULT_PRIVY_APP_ID = process.env.EXPO_PUBLIC_PRIVY_APP_ID as string
 
+const storage = {
+  get: (key: string): string | null => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        return window.localStorage.getItem(key)
+      }
+    } catch {}
+    return null
+  },
+  set: (key: string, val: string) => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(key, val)
+      }
+    } catch {}
+  },
+}
+
 const AuthContext = createContext<AuthContextType>({
   user: null,
-  ensName: 'smithfam.eth',
+  ensName: 'hash.eth',
+  subAccounts: [],
   isAuthenticated: false,
   isLoading: false,
   error: null,
@@ -40,6 +85,9 @@ const AuthContext = createContext<AuthContextType>({
   verifyEmailOtp: async () => false,
   connectExternalWallet: async () => false,
   setEnsName: () => {},
+  addSubAccount: () => {},
+  updateSubAccount: () => {},
+  deleteSubAccount: () => {},
   logout: () => {},
   privyAppId: DEFAULT_PRIVY_APP_ID,
 })
@@ -47,7 +95,7 @@ const AuthContext = createContext<AuthContextType>({
 import { isValidEthereumAddress } from '../services/sepoliaRpc'
 
 // Deterministic smart account address generator for realistic fallback
-function generateSmartAccountAddress(seed: string): string {
+export function generateSmartAccountAddress(seed: string): string {
   let hash1 = 0
   let hash2 = 0
   for (let i = 0; i < seed.length; i++) {
@@ -64,9 +112,69 @@ function generateSmartAccountAddress(seed: string): string {
   return `0x${(hex1 + hex2 + hex3 + hex4 + hex5).slice(0, 40)}`
 }
 
+const DEFAULT_STARTER_SUBACCOUNTS = (root: string): SubAccount[] => [
+  {
+    id: 'sub_pay_default',
+    name: 'Daily Pocket',
+    ens: `pay.${root}`,
+    email: 'alex@transakt.app',
+    address: '0x3F8a92e104dB2D9B387799147D3bEf32A606Ea38',
+    role: 'Limit: $50/tx',
+    eth: '0.12 ETH',
+    fiat: '$342.80',
+    badge: 'ACTIVE',
+    hex: '#1DB563',
+    badgeBg: 'rgba(29,181,99,0.12)',
+    badgeBorder: 'rgba(29,181,99,0.28)',
+    initials: 'PA',
+    avatarHue: '150',
+    weeklyLimit: '$250/week',
+    autoDrop: 'Weekly',
+    canSend: true,
+    canEditProfile: true,
+    inviteLink: `https://transakt.app/join?ens=pay.${root}&email=alex@transakt.app`,
+  },
+  {
+    id: 'sub_vault_default',
+    name: 'College Vault',
+    ens: `vault.${root}`,
+    email: 'vault@transakt.app',
+    address: '0x71C8a27B2f90A2E80562eA9b294D0A38e83f3F9E',
+    role: 'Parent Locked',
+    eth: '1.20 ETH',
+    fiat: '$3,428.00',
+    badge: 'LOCKED',
+    hex: '#FFB830',
+    badgeBg: 'rgba(255,184,48,0.12)',
+    badgeBorder: 'rgba(255,184,48,0.28)',
+    initials: 'VA',
+    avatarHue: '30',
+    weeklyLimit: '$0/week',
+    autoDrop: 'None',
+    canSend: false,
+    canEditProfile: false,
+    inviteLink: `https://transakt.app/join?ens=vault.${root}&email=vault@transakt.app`,
+  },
+]
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserSession | null>(null)
-  const [registeredEns, setRegisteredEns] = useState<string>('smithfam.eth')
+  const [registeredEns, setRegisteredEns] = useState<string>(() => {
+    return storage.get('transakt_ens_name') || 'hash.eth'
+  })
+  const [subAccounts, setSubAccounts] = useState<SubAccount[]>(() => {
+    const cached = storage.get('transakt_subaccounts')
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached)
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed
+      } catch {}
+    }
+    const initialRoot = storage.get('transakt_ens_name') || 'hash.eth'
+    const starter = DEFAULT_STARTER_SUBACCOUNTS(initialRoot)
+    storage.set('transakt_subaccounts', JSON.stringify(starter))
+    return starter
+  })
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [pendingEmail, setPendingEmail] = useState<string | null>(null)
@@ -84,7 +192,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const session: UserSession = {
         id: `usr_passkey_${Date.now()}`,
         address: smartAddress,
-        ensName: 'smithfam.eth',
+        ensName: registeredEns || 'hash.eth',
         authMethod: 'passkey',
         createdAt: new Date().toISOString(),
         isEmbeddedWallet: true,
@@ -172,7 +280,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         id: userId,
         email,
         address: smartAddress,
-        ensName: `${email.split('@')[0]}.smithfam.eth`,
+        ensName: `${email.split('@')[0]}.${registeredEns || 'hash.eth'}`,
         authMethod: 'email',
         createdAt: new Date().toISOString(),
         isEmbeddedWallet: true,
@@ -235,11 +343,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error('Failed to retrieve external wallet address.')
       }
 
-      const shortAddr = `${externalAddress.slice(0, 6)}...${externalAddress.slice(-4)}`
       const session: UserSession = {
         id: `usr_${type}_${Date.now()}`,
         address: externalAddress,
-        ensName: `${type === 'metamask' ? 'alex' : 'parent'}.smithfam.eth`,
+        ensName: `${type === 'metamask' ? 'alex' : 'parent'}.${registeredEns || 'hash.eth'}`,
         authMethod: type,
         createdAt: new Date().toISOString(),
         isEmbeddedWallet: false,
@@ -256,19 +363,63 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const setEnsName = (ensName: string) => {
-    setRegisteredEns(ensName)
-    if (user) {
-      setUser({ ...user, ensName })
-    } else {
-      setUser({
+    const cleanEns = ensName.trim().toLowerCase()
+    storage.set('transakt_ens_name', cleanEns)
+    setRegisteredEns(cleanEns)
+    setUser((prev) => {
+      if (prev) return { ...prev, ensName: cleanEns }
+      return {
         id: `usr_${Date.now()}`,
         address: '0x71C8a27B2f90A2E80562eA9b294D0A38e83f3F9E',
-        ensName,
+        ensName: cleanEns,
         authMethod: 'passkey',
         createdAt: new Date().toISOString(),
         isEmbeddedWallet: true,
+      }
+    })
+    setSubAccounts((prev) => {
+      const updated = prev.map((a) => {
+        const parts = a.ens.split('.')
+        if (parts.length > 2) {
+          const childLabel = parts[0]
+          return {
+            ...a,
+            ens: `${childLabel}.${cleanEns}`,
+            inviteLink: a.inviteLink
+              ? a.inviteLink.replace(/ens=[^&]+/, `ens=${childLabel}.${cleanEns}`)
+              : undefined,
+          }
+        }
+        return a
       })
-    }
+      storage.set('transakt_subaccounts', JSON.stringify(updated))
+      return updated
+    })
+  }
+
+  const addSubAccount = (acc: SubAccount) => {
+    setSubAccounts((prev) => {
+      const filtered = prev.filter((a) => a.id !== acc.id && a.ens !== acc.ens)
+      const updated = [...filtered, acc]
+      storage.set('transakt_subaccounts', JSON.stringify(updated))
+      return updated
+    })
+  }
+
+  const updateSubAccount = (id: string, updates: Partial<SubAccount>) => {
+    setSubAccounts((prev) => {
+      const updated = prev.map((a) => (a.id === id ? { ...a, ...updates } : a))
+      storage.set('transakt_subaccounts', JSON.stringify(updated))
+      return updated
+    })
+  }
+
+  const deleteSubAccount = (id: string) => {
+    setSubAccounts((prev) => {
+      const updated = prev.filter((a) => a.id !== id)
+      storage.set('transakt_subaccounts', JSON.stringify(updated))
+      return updated
+    })
   }
 
   const logout = () => {
@@ -282,6 +433,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       value={{
         user,
         ensName: user?.ensName || registeredEns,
+        subAccounts,
+        addSubAccount,
+        updateSubAccount,
+        deleteSubAccount,
         isAuthenticated: !!user,
         isLoading,
         error,
