@@ -2,7 +2,7 @@
   "expo": {
     "name": "Transakt",
     "slug": "transakt",
-    "owner": "myusername1223",
+    "owner": "shashankj02",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.svg",
@@ -29,7 +29,7 @@
     },
     "extra": {
       "eas": {
-        "projectId": "676f99ce-11fd-4e54-aa3f-ed42f5ecfa9e"
+        "projectId": "bf2f44cb-abf5-4fbd-9967-87842accf273"
       }
     }
   }
