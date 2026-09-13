@@ -13,7 +13,7 @@ import {
 } from 'react-native'
 import Svg, { Path } from 'react-native-svg'
 import { useTheme } from '../context/ThemeContext'
-import { useAuth } from '../context/AuthContext'
+import { useAuth, storage } from '../context/AuthContext'
 import { IconCheck, IconX, EthDiamond } from '../components/Icons'
 import {
   checkEnsAvailability,
@@ -152,6 +152,7 @@ export default function ENSSearchScreen({ onPurchase }: Props) {
 
   const handleComplete = () => {
     setShowTxModal(false)
+    storage.set('transakt_onboarding_completed', 'true')
     onPurchase()
   }
 
@@ -172,16 +173,31 @@ export default function ENSSearchScreen({ onPurchase }: Props) {
             <Text style={styles.stepBadgeText}>Free ENS Onboarding</Text>
           </View>
 
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={() => Linking.openURL(`https://sepolia.etherscan.io/address/${rawAddress}`)}
-            style={[styles.accountPill, { backgroundColor: colors.surface, borderColor: colors.border }]}
-          >
-            <EthDiamond size={11} color="#1D5D3A" />
-            <Text style={[styles.accountPillText, { color: colors.fg2 }]}>
-              {liveBalance !== null ? `${liveBalance.toFixed(3)} ETH` : '0.000 ETH'} · {shortAddress}
-            </Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => {
+                storage.set('transakt_onboarding_completed', 'true')
+                onPurchase()
+              }}
+              style={[styles.accountPill, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            >
+              <Text style={[styles.accountPillText, { color: colors.fg2 }]}>
+                Skip to App →
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => Linking.openURL(`https://sepolia.etherscan.io/address/${rawAddress}`)}
+              style={[styles.accountPill, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            >
+              <EthDiamond size={11} color="#1D5D3A" />
+              <Text style={[styles.accountPillText, { color: colors.fg2 }]}>
+                {liveBalance !== null ? `${liveBalance.toFixed(3)} ETH` : '0.000 ETH'} · {shortAddress}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <Text style={[styles.title, { color: colors.fg }]}>

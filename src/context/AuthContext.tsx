@@ -54,7 +54,7 @@ interface AuthContextType {
 
 const DEFAULT_PRIVY_APP_ID = process.env.EXPO_PUBLIC_PRIVY_APP_ID as string
 
-const storage = {
+export const storage = {
   get: (key: string): string | null => {
     try {
       if (typeof window !== 'undefined' && window.localStorage) {
@@ -67,6 +67,13 @@ const storage = {
     try {
       if (typeof window !== 'undefined' && window.localStorage) {
         window.localStorage.setItem(key, val)
+      }
+    } catch {}
+  },
+  remove: (key: string) => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.removeItem(key)
       }
     } catch {}
   },
@@ -158,7 +165,26 @@ const DEFAULT_STARTER_SUBACCOUNTS = (root: string): SubAccount[] => [
 ]
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<UserSession | null>(null)
+  const [user, setUser] = useState<UserSession | null>(() => {
+    const cached = storage.get('transakt_user_session')
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached)
+        if (parsed && parsed.address) return parsed
+      } catch {}
+    }
+    return null
+  })
+
+  // Synchronize active session to persistent storage
+  useEffect(() => {
+    if (user) {
+      storage.set('transakt_user_session', JSON.stringify(user))
+    } else {
+      storage.remove('transakt_user_session')
+    }
+  }, [user])
+
   const [registeredEns, setRegisteredEns] = useState<string>(() => {
     return storage.get('transakt_ens_name') || 'hash.eth'
   })
@@ -198,6 +224,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isEmbeddedWallet: true,
       }
 
+      storage.set('transakt_user_session', JSON.stringify(session))
       setUser(session)
       setIsLoading(false)
       return true
@@ -286,6 +313,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isEmbeddedWallet: true,
       }
 
+      storage.set('transakt_user_session', JSON.stringify(session))
       setUser(session)
       setIsLoading(false)
       return true
@@ -352,6 +380,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isEmbeddedWallet: false,
       }
 
+      storage.set('transakt_user_session', JSON.stringify(session))
       setUser(session)
       setIsLoading(false)
       return true
@@ -426,6 +455,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null)
     setPendingEmail(null)
     setError(null)
+    storage.remove('transakt_user_session')
+    storage.remove('transakt_onboarding_completed')
   }
 
   return (

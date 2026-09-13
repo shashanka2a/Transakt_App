@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   View,
   StyleSheet,
@@ -6,7 +6,7 @@ import {
 } from 'react-native'
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
 import { ThemeProvider, useTheme } from './context/ThemeContext'
-import { AuthProvider, useAuth } from './context/AuthContext'
+import { AuthProvider, useAuth, storage } from './context/AuthContext'
 import LoadingScreen from './screens/LoadingScreen'
 import WelcomeScreen from './screens/WelcomeScreen'
 import ENSSearchScreen from './screens/ENSSearchScreen'
@@ -37,6 +37,7 @@ export default function App() {
 
 function AppShell() {
   const { theme, colors, isDark } = useTheme()
+  const { user, isAuthenticated, ensName } = useAuth()
   const [flow, setFlow] = useState<AppFlow>('loading')
   const [activeTab, setActiveTab] = useState<Tab>('home')
   const [showBio, setShowBio] = useState(false)
@@ -49,6 +50,13 @@ function AppShell() {
   const [showRequest, setShowRequest] = useState(false)
   const [showSwap, setShowSwap] = useState(false)
 
+  // Sync flow back to login if user logs out
+  useEffect(() => {
+    if (flow === 'app' && !isAuthenticated && !user) {
+      setFlow('welcome')
+    }
+  }, [flow, isAuthenticated, user])
+
   return (
     <SafeAreaView
       edges={['top', 'left', 'right']}
@@ -59,18 +67,42 @@ function AppShell() {
         backgroundColor={colors.bg}
       />
 
-      {/* ── Loading Overlay ── */}
+      {/* ── Loading Overlay (Auto-transitions to App if authenticated) ── */}
       {flow === 'loading' && (
-        <LoadingScreen onDone={() => setFlow('welcome')} />
+        <LoadingScreen
+          onDone={() => {
+            const hasSession = !!user || !!storage.get('transakt_user_session')
+            if (hasSession) {
+              setFlow('app')
+            } else {
+              setFlow('welcome')
+            }
+          }}
+        />
       )}
 
       {/* ── Onboarding Flows ── */}
       {flow === 'welcome' && (
-        <WelcomeScreen onContinue={() => setFlow('ens-search')} />
+        <WelcomeScreen
+          onContinue={() => {
+            const onboardingDone = storage.get('transakt_onboarding_completed') === 'true'
+            const hasEns = ensName && ensName !== 'hash.eth'
+            if (onboardingDone || hasEns) {
+              setFlow('app')
+            } else {
+              setFlow('ens-search')
+            }
+          }}
+        />
       )}
 
       {flow === 'ens-search' && (
-        <ENSSearchScreen onPurchase={() => setFlow('app')} />
+        <ENSSearchScreen
+          onPurchase={() => {
+            storage.set('transakt_onboarding_completed', 'true')
+            setFlow('app')
+          }}
+        />
       )}
 
       {flow === 'ens-dashboard' && (

@@ -20,6 +20,7 @@ import {
 import { useTheme } from '../context/ThemeContext'
 import { useAuth } from '../context/AuthContext'
 import { resolveEnsAddress } from '../services/ensv2Client'
+import { isValidEthereumAddress } from '../services/sepoliaRpc'
 
 const presets = ['$10', '$25', '$50', 'Max']
 const noteOptions = [
@@ -37,61 +38,154 @@ interface Props {
 
 export default function SendTab({ onReview, onBack }: Props) {
   const { colors } = useTheme()
-  const { user, ensName } = useAuth()
+  const { user, ensName, subAccounts } = useAuth()
   const rootEnsName = user?.ensName || ensName || 'hash.eth'
   const [query, setQuery] = useState('')
   const [resolved, setResolved] = useState(false)
   const [resolvedAddr, setResolvedAddr] = useState<string | null>(null)
+  const [recipientDisplayName, setRecipientDisplayName] = useState<string>('')
   const [amount, setAmount] = useState('0.00')
   const [note, setNote] = useState('Dinner split')
   const [noteOpen, setNoteOpen] = useState(false)
 
   const handleQuery = async (v: string) => {
     setQuery(v)
-    const clean = v.trim().toLowerCase().replace(/^\$/, '')
+    const clean = v.trim()
+    const cleanLower = clean.toLowerCase().replace(/^\$/, '')
 
-    if (clean.includes('mom') || clean.includes('alex') || clean.includes('dad')) {
-      setResolved(true)
-      setResolvedAddr('0x71C8...3F9E')
+    if (!clean) {
+      setResolved(false)
+      setResolvedAddr(null)
+      setRecipientDisplayName('')
       return
     }
 
-    if (clean.includes('.eth')) {
-      const addr = await resolveEnsAddress(clean)
-      if (addr) {
-        setResolved(true)
-        setResolvedAddr(`${addr.slice(0, 6)}...${addr.slice(-4)}`)
-      } else {
-        setResolved(true)
+    // 1. Direct Ethereum Wallet Address (0x...)
+    if (isValidEthereumAddress(clean) || (cleanLower.startsWith('0x') && cleanLower.length >= 8)) {
+      setResolved(true)
+      const formattedAddr =
+        clean.length > 14 ? `${clean.slice(0, 6)}...${clean.slice(-4)}` : clean
+      setResolvedAddr(formattedAddr)
+      setRecipientDisplayName(formattedAddr)
+      return
+    }
+
+    // 2. Matching existing Family Sub-Account
+    const matchedSub = subAccounts?.find(
+      (s) =>
+        s.name.toLowerCase() === cleanLower ||
+        s.ens.toLowerCase() === cleanLower ||
+        s.ens.toLowerCase().startsWith(`${cleanLower}.`)
+    )
+    if (matchedSub) {
+      setResolved(true)
+      setResolvedAddr(
+        matchedSub.address
+          ? `${matchedSub.address.slice(0, 6)}...${matchedSub.address.slice(-4)}`
+          : '0x3F8a...Ea38'
+      )
+      setRecipientDisplayName(matchedSub.ens)
+      return
+    }
+
+    // 3. Known quick nicknames
+    if (['mom', 'alex', 'dad', 'claire', 'pay', 'vault'].includes(cleanLower)) {
+      setResolved(true)
+      setResolvedAddr('0x71C8...3F9E')
+      setRecipientDisplayName(`${cleanLower}.${rootEnsName}`)
+      return
+    }
+
+    // 4. ENS Name (.eth)
+    if (cleanLower.includes('.eth')) {
+      setResolved(true)
+      setRecipientDisplayName(cleanLower)
+      try {
+        const addr = await resolveEnsAddress(cleanLower)
+        if (addr && isValidEthereumAddress(addr)) {
+          setResolvedAddr(`${addr.slice(0, 6)}...${addr.slice(-4)}`)
+        } else {
+          setResolvedAddr('0x3F8a...Ea38')
+        }
+      } catch {
         setResolvedAddr('0x3F8a...Ea38')
       }
-    } else {
-      setResolved(false)
-      setResolvedAddr(null)
+      return
     }
+
+    // 5. Any other name/tag typed by the user (>= 2 chars)
+    if (cleanLower.length >= 2) {
+      setResolved(true)
+      setResolvedAddr('0x71C8...3F9E')
+      setRecipientDisplayName(clean.includes('.') ? clean : `${cleanLower}.${rootEnsName}`)
+      return
+    }
+
+    setResolved(false)
+    setResolvedAddr(null)
+    setRecipientDisplayName('')
+  }
+
+  const handleAmountChange = (text: string) => {
+    let clean = text.replace(/[^0-9.]/g, '')
+    const parts = clean.split('.')
+    if (parts.length > 2) {
+      clean = `${parts[0]}.${parts.slice(1).join('')}`
+    }
+    if (parts[1] && parts[1].length > 2) {
+      clean = `${parts[0]}.${parts[1].slice(0, 2)}`
+    }
+    setAmount(clean || '0.00')
   }
 
   const handleKey = (k: string) => {
+    if (k === '⌫') {
+      setAmount((prev) => {
+        if (prev.length <= 1 || prev === '0.00') return '0.00'
+        const next = prev.slice(0, -1)
+        return next === '' || next === '0.' ? '0.00' : next
+      })
+      return
+    }
+
+    if (k === '.') {
+      setAmount((prev) => {
+        if (prev.includes('.')) return prev
+        return `${prev}.`
+      })
+      return
+    }
+
+    // Number key 0-9
     setAmount((prev) => {
-      if (k === '⌫') {
-        const digits = prev.replace('.', '').slice(0, -1) || '0'
-        return (parseInt(digits, 10) / 100).toFixed(2)
-      }
-      const digits = prev.replace('.', '').replace(/^0+/, '') + k
-      return (parseInt(digits || '0', 10) / 100).toFixed(2)
+      if (prev === '0.00' || prev === '0') return k
+      if (prev.includes('.') && prev.split('.')[1]?.length >= 2) return prev
+      return prev + k
     })
   }
 
-  const numAmt = parseFloat(amount)
-  const canSend = resolved && numAmt > 0
+  const numAmt = parseFloat(amount) || 0
+  const canSend = (resolved || query.trim().length > 0) && numAmt > 0
 
   const handleSendPress = () => {
     if (canSend) {
+      const targetRecipient =
+        recipientDisplayName ||
+        (query.trim().startsWith('0x')
+          ? `${query.trim().slice(0, 6)}...${query.trim().slice(-4)}`
+          : query.trim() || `alex.${rootEnsName}`)
+
       onReview({
-        amount: `$${amount}`,
-        recipient: query.trim() || `alex.${rootEnsName}`,
+        amount: `$${numAmt.toFixed(2)}`,
+        recipient: targetRecipient,
       })
     }
+  }
+
+  const getButtonLabel = () => {
+    if (!query.trim()) return 'Enter Recipient'
+    if (numAmt <= 0) return 'Enter Amount'
+    return 'Verify Humanity & Send'
   }
 
   return (
@@ -166,13 +260,18 @@ export default function SendTab({ onReview, onBack }: Props) {
               >
                 <View style={[styles.recipientAvatar, { backgroundColor: '#1D5D3A' }]}>
                   <Text style={[styles.avatarText, { color: '#F5F3EB' }]}>
-                    {(query.replace(/^\$/, '').charAt(0) || 'M').toUpperCase()}
+                    {query.trim().startsWith('0x')
+                      ? 'Ξ'
+                      : (query.replace(/^\$/, '').charAt(0) || 'M').toUpperCase()}
                   </Text>
                 </View>
                 <View style={styles.recipientInfo}>
                   <View style={styles.recipientNameRow}>
                     <Text style={[styles.recipientName, { color: colors.fg }]}>
-                      {query.includes('.') ? query.trim() : `${query.trim() || 'mom'}.${rootEnsName}`}
+                      {recipientDisplayName ||
+                        (query.includes('.')
+                          ? query.trim()
+                          : `${query.trim() || 'mom'}.${rootEnsName}`)}
                     </Text>
                     <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
                       <Circle cx="12" cy="12" r="10" fill={colors.accent} />
@@ -208,14 +307,17 @@ export default function SendTab({ onReview, onBack }: Props) {
         <View style={styles.amountSection}>
           <View style={styles.amountRow}>
             <Text style={[styles.amountDollar, { color: colors.fg3 }]}>$</Text>
-            <Text
+            <TextInput
+              value={amount === '0.00' ? '' : amount}
+              onChangeText={handleAmountChange}
+              placeholder="0.00"
+              placeholderTextColor={colors.border2}
+              keyboardType="decimal-pad"
               style={[
-                styles.amountValue,
+                styles.amountInput,
                 { color: numAmt > 0 ? colors.fg : colors.border2 },
               ]}
-            >
-              {amount}
-            </Text>
+            />
           </View>
           <Text style={[styles.ethEquivalent, { color: colors.fg2 }]}>
             ≈ {(numAmt / 2449.14).toFixed(4)} ETH
@@ -377,7 +479,7 @@ export default function SendTab({ onReview, onBack }: Props) {
               { color: canSend ? colors.accentFg : colors.fg3 },
             ]}
           >
-            {canSend ? 'Verify Humanity & Send' : 'Enter Amount'}
+            {getButtonLabel()}
           </Text>
         </TouchableOpacity>
       </ScrollView>
@@ -505,6 +607,15 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: -2,
     lineHeight: 66,
+  },
+  amountInput: {
+    fontSize: 56,
+    fontWeight: '900',
+    letterSpacing: -2,
+    minWidth: 120,
+    textAlign: 'center',
+    padding: 0,
+    margin: 0,
   },
   ethEquivalent: {
     fontSize: 13,

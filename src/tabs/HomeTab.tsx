@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
 } from 'react-native'
 import { Tab } from '../App'
+import Svg, { Path } from 'react-native-svg'
 import { useTheme } from '../context/ThemeContext'
 import { useAuth } from '../context/AuthContext'
 import {
@@ -87,7 +88,7 @@ export default function HomeTab({
   onOpenSwap,
 }: Props) {
   const { theme, colors, toggle } = useTheme()
-  const { user, ensName, subAccounts } = useAuth()
+  const { user, ensName, subAccounts, logout } = useAuth()
   const [liveBalance, setLiveBalance] = useState<number | null>(null)
   const [liveTransfers, setLiveTransfers] = useState<OnchainTransfer[]>([])
   const [isLoadingTransfers, setIsLoadingTransfers] = useState(false)
@@ -172,23 +173,43 @@ export default function HomeTab({
             </Text>
           </View>
 
-          <TouchableOpacity
-            activeOpacity={0.75}
-            onPress={toggle}
-            style={[
-              styles.themeToggleBtn,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.border,
-              },
-            ]}
-          >
-            {theme === 'dark' ? (
-              <IconSun size={15} color={colors.fg2} />
-            ) : (
-              <IconMoon size={15} color={colors.fg2} />
-            )}
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <TouchableOpacity
+              activeOpacity={0.75}
+              onPress={toggle}
+              style={[
+                styles.themeToggleBtn,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              {theme === 'dark' ? (
+                <IconSun size={15} color={colors.fg2} />
+              ) : (
+                <IconMoon size={15} color={colors.fg2} />
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              activeOpacity={0.75}
+              onPress={logout}
+              style={[
+                styles.themeToggleBtn,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <Svg width={15} height={15} viewBox="0 0 24 24" fill="none">
+                <Path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" stroke={colors.fg2} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                <Path d="M16 17l5-5-5-5" stroke={colors.fg2} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                <Path d="M21 12H9" stroke={colors.fg2} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              </Svg>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Hero Treasury Balance (Actual Live Balance) */}
