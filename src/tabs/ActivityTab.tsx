@@ -10,7 +10,7 @@ import {
   ActivityIndicator,
 } from 'react-native'
 import { useTheme } from '../context/ThemeContext'
-import { useAuth } from '../context/AuthContext'
+import { useAuth, storage } from '../context/AuthContext'
 import { EthDiamond } from '../components/Icons'
 import {
   getSepoliaBalance,
@@ -45,7 +45,20 @@ export default function ActivityTab() {
       .then(([bal, transfers]) => {
         if (isMounted) {
           setLiveBalance(bal)
-          setLiveTransfers(transfers)
+          const cached = storage.get('transakt_recent_transfers')
+          let localTransfers: OnchainTransfer[] = []
+          if (cached) {
+            try {
+              localTransfers = JSON.parse(cached)
+            } catch {}
+          }
+          const combined = [
+            ...localTransfers,
+            ...transfers.filter(
+              (t) => !localTransfers.some((l) => l.hash.toLowerCase() === t.hash.toLowerCase())
+            ),
+          ]
+          setLiveTransfers(combined)
           setIsLoading(false)
         }
       })

@@ -45,6 +45,7 @@ function AppShell() {
     actionType: 'transfer' | 'policy' | 'subname' | 'auth'
     amount?: string
     recipient?: string
+    recipientAddress?: string
     policyDetails?: string
   }>({ actionType: 'transfer', amount: '$50.00', recipient: 'alex.hash.eth' })
   const [showRequest, setShowRequest] = useState(false)
@@ -127,6 +128,7 @@ function AppShell() {
                     actionType: 'transfer',
                     amount: data.amount,
                     recipient: data.recipient,
+                    recipientAddress: data.recipientAddress,
                   })
                   setShowBio(true)
                 }}
@@ -151,6 +153,7 @@ function AppShell() {
               actionType={bioData.actionType}
               amount={bioData.amount}
               recipient={bioData.recipient}
+              recipientAddress={bioData.recipientAddress}
               policyDetails={bioData.policyDetails}
             />
           )}

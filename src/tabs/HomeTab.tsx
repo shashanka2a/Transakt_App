@@ -13,7 +13,7 @@ import {
 import { Tab } from '../App'
 import Svg, { Path } from 'react-native-svg'
 import { useTheme } from '../context/ThemeContext'
-import { useAuth } from '../context/AuthContext'
+import { useAuth, storage } from '../context/AuthContext'
 import {
   IconSend,
   IconRequest,
@@ -125,7 +125,20 @@ export default function HomeTab({
     getLiveAssetTransfers(rawAddress)
       .then((transfers) => {
         if (isMounted) {
-          setLiveTransfers(transfers)
+          const cached = storage.get('transakt_recent_transfers')
+          let localTransfers: OnchainTransfer[] = []
+          if (cached) {
+            try {
+              localTransfers = JSON.parse(cached)
+            } catch {}
+          }
+          const combined = [
+            ...localTransfers,
+            ...transfers.filter(
+              (t) => !localTransfers.some((l) => l.hash.toLowerCase() === t.hash.toLowerCase())
+            ),
+          ]
+          setLiveTransfers(combined)
           setIsLoadingTransfers(false)
         }
       })

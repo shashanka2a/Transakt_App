@@ -10,9 +10,11 @@
 import { createSmartAccountClient } from 'permissionless'
 import { toSimpleSmartAccount } from 'permissionless/accounts'
 import { createPimlicoClient } from 'permissionless/clients/pimlico'
-import { createPublicClient, http, parseAbi, encodeFunctionData, bytesToHex } from 'viem'
+import { createPublicClient, http, parseAbi, encodeFunctionData, bytesToHex, getAddress } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { sepolia } from 'viem/chains'
+import { resolveEnsAddress } from './ensv2Client'
+import { isValidEthereumAddress } from './sepoliaRpc'
 
 export const PIMLICO_CONFIG = {
   /** Pimlico Bundler v2 RPC endpoint (Sepolia) */
@@ -438,9 +440,19 @@ export async function sendGaslessTransfer(
     'function mint(address to, uint256 amount)',
     'function transfer(address to, uint256 amount)'
   ])
-  const targetRecipient = (recipientAddress && recipientAddress.startsWith('0x') && recipientAddress.length === 42)
-    ? (recipientAddress as `0x${string}`)
-    : ('0x0000000000000000000000000000000000000000' as `0x${string}`)
+  let targetRecipient: `0x${string}` = '0x3F8a92e104dB2D9B387799147D3bEf32A606Ea38'
+  if (recipientAddress && recipientAddress.includes('.')) {
+    try {
+      const resolved = await resolveEnsAddress(recipientAddress)
+      if (resolved && isValidEthereumAddress(resolved)) {
+        targetRecipient = getAddress(resolved)
+      }
+    } catch {}
+  } else if (recipientAddress && recipientAddress.startsWith('0x')) {
+    try {
+      targetRecipient = getAddress(recipientAddress.trim())
+    } catch {}
+  }
   const amount = BigInt(amountWei || '1000000')
   const SMART_ACCOUNT_ADDRESS = '0xa3aBDC7f6334CD3EE466A115f30522377787c024' as `0x${string}`
   

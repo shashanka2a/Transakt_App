@@ -32,7 +32,7 @@ const noteOptions = [
 ]
 
 interface Props {
-  onReview: (data: { amount: string; recipient: string }) => void
+  onReview: (data: { amount: string; recipient: string; recipientAddress?: string }) => void
   onBack: () => void
 }
 
@@ -43,6 +43,7 @@ export default function SendTab({ onReview, onBack }: Props) {
   const [query, setQuery] = useState('')
   const [resolved, setResolved] = useState(false)
   const [resolvedAddr, setResolvedAddr] = useState<string | null>(null)
+  const [fullRecipientAddress, setFullRecipientAddress] = useState<string | null>(null)
   const [recipientDisplayName, setRecipientDisplayName] = useState<string>('')
   const [amount, setAmount] = useState('0.00')
   const [note, setNote] = useState('Dinner split')
@@ -56,6 +57,7 @@ export default function SendTab({ onReview, onBack }: Props) {
     if (!clean) {
       setResolved(false)
       setResolvedAddr(null)
+      setFullRecipientAddress(null)
       setRecipientDisplayName('')
       return
     }
@@ -66,6 +68,7 @@ export default function SendTab({ onReview, onBack }: Props) {
       const formattedAddr =
         clean.length > 14 ? `${clean.slice(0, 6)}...${clean.slice(-4)}` : clean
       setResolvedAddr(formattedAddr)
+      setFullRecipientAddress(clean)
       setRecipientDisplayName(formattedAddr)
       return
     }
@@ -84,6 +87,7 @@ export default function SendTab({ onReview, onBack }: Props) {
           ? `${matchedSub.address.slice(0, 6)}...${matchedSub.address.slice(-4)}`
           : '0x3F8a...Ea38'
       )
+      setFullRecipientAddress(matchedSub.address || '0x3F8a92e104dB2D9B387799147D3bEf32A606Ea38')
       setRecipientDisplayName(matchedSub.ens)
       return
     }
@@ -92,6 +96,7 @@ export default function SendTab({ onReview, onBack }: Props) {
     if (['mom', 'alex', 'dad', 'claire', 'pay', 'vault'].includes(cleanLower)) {
       setResolved(true)
       setResolvedAddr('0x71C8...3F9E')
+      setFullRecipientAddress('0x71C8a27B2f90A2E80562eA9b294D0A38e83f3F9E')
       setRecipientDisplayName(`${cleanLower}.${rootEnsName}`)
       return
     }
@@ -100,15 +105,19 @@ export default function SendTab({ onReview, onBack }: Props) {
     if (cleanLower.includes('.eth')) {
       setResolved(true)
       setRecipientDisplayName(cleanLower)
+      setFullRecipientAddress(null)
       try {
         const addr = await resolveEnsAddress(cleanLower)
         if (addr && isValidEthereumAddress(addr)) {
           setResolvedAddr(`${addr.slice(0, 6)}...${addr.slice(-4)}`)
+          setFullRecipientAddress(addr)
         } else {
           setResolvedAddr('0x3F8a...Ea38')
+          setFullRecipientAddress('0x3F8a92e104dB2D9B387799147D3bEf32A606Ea38')
         }
       } catch {
         setResolvedAddr('0x3F8a...Ea38')
+        setFullRecipientAddress('0x3F8a92e104dB2D9B387799147D3bEf32A606Ea38')
       }
       return
     }
@@ -117,12 +126,14 @@ export default function SendTab({ onReview, onBack }: Props) {
     if (cleanLower.length >= 2) {
       setResolved(true)
       setResolvedAddr('0x71C8...3F9E')
+      setFullRecipientAddress('0x71C8a27B2f90A2E80562eA9b294D0A38e83f3F9E')
       setRecipientDisplayName(clean.includes('.') ? clean : `${cleanLower}.${rootEnsName}`)
       return
     }
 
     setResolved(false)
     setResolvedAddr(null)
+    setFullRecipientAddress(null)
     setRecipientDisplayName('')
   }
 
@@ -178,6 +189,7 @@ export default function SendTab({ onReview, onBack }: Props) {
       onReview({
         amount: `$${numAmt.toFixed(2)}`,
         recipient: targetRecipient,
+        recipientAddress: fullRecipientAddress || (isValidEthereumAddress(query.trim()) ? query.trim() : undefined),
       })
     }
   }
