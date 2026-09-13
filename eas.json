@@ -11,11 +11,33 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_PRIVY_APP_ID": "cmto2iefd000q0bla0z8jfitr",
+        "EXPO_PUBLIC_ALCHEMY_API_KEY": "alch_MLfccmm0R5vlTvvshnekM",
+        "EXPO_PUBLIC_SEPOLIA_RPC_URL": "https://eth-sepolia.g.alchemy.com/v2/alch_MLfccmm0R5vlTvvshnekM",
+        "EXPO_PUBLIC_ALCHEMY_GAS_POLICY_ID": "0d31ecb2-b2bd-46fe-a94c-be209d8b17f7",
+        "EXPO_PUBLIC_DEFAULT_CHAIN_ID": "11155111",
+        "EXPO_PUBLIC_WORLD_ID_APP_ID": "app_transakt_world_id_01",
+        "EXPO_PUBLIC_WORLD_ID_ACTION": "family_tx_verification",
+        "EXPO_PUBLIC_COINGECKO_API_URL": "https://api.coingecko.com/api/v3",
+        "EXPO_PUBLIC_PIMLICO_RPC_URL": "https://api.pimlico.io/v2/11155111/rpc?apikey=pim_7ks5iRRdgQyVSnN3f1GLbW"
       }
     },
     "production": {
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_PRIVY_APP_ID": "cmto2iefd000q0bla0z8jfitr",
+        "EXPO_PUBLIC_ALCHEMY_API_KEY": "alch_MLfccmm0R5vlTvvshnekM",
+        "EXPO_PUBLIC_SEPOLIA_RPC_URL": "https://eth-sepolia.g.alchemy.com/v2/alch_MLfccmm0R5vlTvvshnekM",
+        "EXPO_PUBLIC_ALCHEMY_GAS_POLICY_ID": "0d31ecb2-b2bd-46fe-a94c-be209d8b17f7",
+        "EXPO_PUBLIC_DEFAULT_CHAIN_ID": "11155111",
+        "EXPO_PUBLIC_WORLD_ID_APP_ID": "app_transakt_world_id_01",
+        "EXPO_PUBLIC_WORLD_ID_ACTION": "family_tx_verification",
+        "EXPO_PUBLIC_COINGECKO_API_URL": "https://api.coingecko.com/api/v3",
+        "EXPO_PUBLIC_PIMLICO_RPC_URL": "https://api.pimlico.io/v2/11155111/rpc?apikey=pim_7ks5iRRdgQyVSnN3f1GLbW"
       }
     }
   },
