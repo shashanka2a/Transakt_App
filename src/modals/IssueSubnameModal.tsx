@@ -57,7 +57,8 @@ type Step = 'compose' | 'minting' | 'done'
 
 export default function IssueSubnameModal({ onClose }: Props) {
   const { colors } = useTheme()
-  const { user } = useAuth()
+  const { user, ensName } = useAuth()
+  const rootEnsName = user?.ensName || ensName || 'smithfam.eth'
   const [subname, setSubname] = useState('')
   const [perms, setPerms] = useState<Perm[]>(initPerms)
   const [editId, setEditId] = useState<string | null>(null)
@@ -77,7 +78,7 @@ export default function IssueSubnameModal({ onClose }: Props) {
     setStep('minting')
     
     const rawAddress = user?.address || '0x71C8a27B2f90A2E80562eA9b294D0A38e83f3F9E'
-    const result = await mintGaslessSubname('smithfam.eth', subname, rawAddress)
+    const result = await mintGaslessSubname(rootEnsName, subname, rawAddress)
     
     if (result.success) {
       setStep('done')
@@ -135,7 +136,7 @@ export default function IssueSubnameModal({ onClose }: Props) {
                 Subname Minted
               </Text>
               <Text style={[styles.successName, { color: colors.fg }]}>
-                {subname}.smithfam.eth
+                {subname}.{rootEnsName}
               </Text>
               <Text style={[styles.successDesc, { color: colors.fg2 }]}>
                 An invite link has been sent. The new member can activate their account using biometrics.
@@ -196,7 +197,7 @@ export default function IssueSubnameModal({ onClose }: Props) {
                     Issue Subname
                   </Text>
                   <Text style={[styles.sheetSubdomain, { color: colors.accent }]}>
-                    smithfam.eth
+                    {rootEnsName}
                   </Text>
                 </View>
                 <TouchableOpacity
@@ -246,12 +247,12 @@ export default function IssueSubnameModal({ onClose }: Props) {
                     style={[styles.subnameTextInput, { color: colors.fg }]}
                   />
                   <Text style={[styles.subnameSuffix, { color: colors.fg3 }]}>
-                    .smithfam.eth
+                    .{rootEnsName}
                   </Text>
                 </View>
                 {subname.length > 0 && (
                   <Text style={[styles.subnameSuccessPreview, { color: colors.accent }]}>
-                    ✓ {subname}.smithfam.eth looks good
+                    ✓ {subname}.{rootEnsName} looks good
                   </Text>
                 )}
               </View>

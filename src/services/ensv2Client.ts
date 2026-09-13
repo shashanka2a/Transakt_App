@@ -15,9 +15,17 @@ export const ENSV2_HACKATHON_CONFIG = {
   defaultRpcUrl: process.env.EXPO_PUBLIC_SEPOLIA_RPC_URL as string,
 }
 
-// Public Client instance targeting standard Sepolia ENS resolution
+// Public Client instance targeting Hackathon ENSv2 Universal Resolver
 export const ensClient = createPublicClient({
-  chain: sepolia,
+  chain: {
+    ...sepolia,
+    contracts: {
+      ...sepolia.contracts,
+      ensUniversalResolver: {
+        address: ENSV2_HACKATHON_CONFIG.universalResolverAddress,
+      },
+    },
+  },
   transport: http(ENSV2_HACKATHON_CONFIG.defaultRpcUrl),
 })
 
@@ -198,6 +206,7 @@ export interface RegistrationProgress {
   detail: string
   txHash?: string
   explorerUrl?: string
+  sepoliaTxUrl?: string
 }
 
 export interface RegistrationResult {
@@ -207,6 +216,7 @@ export interface RegistrationResult {
   txHash: string
   explorerUrl: string
   appUrl: string
+  sepoliaTxUrl?: string
 }
 
 export async function executeEnsRegistration(
@@ -250,12 +260,14 @@ export async function executeEnsRegistration(
 
       const explorerUrl = `${ENSV2_HACKATHON_CONFIG.explorerUrl}name/${cleanName}`
       const appUrl = `${ENSV2_HACKATHON_CONFIG.appUrl}name/${cleanName}`
+      const sepoliaTxUrl = result.txHash ? `https://sepolia.etherscan.io/tx/${result.txHash}` : ''
 
       onProgress?.({
         stage: 'confirmed',
         detail: `🎉 ${cleanName} minted gaslessly! Gas sponsored by Pimlico.`,
         txHash: result.txHash,
         explorerUrl,
+        sepoliaTxUrl,
       })
 
       return {
@@ -265,6 +277,7 @@ export async function executeEnsRegistration(
         txHash: result.txHash,
         explorerUrl,
         appUrl,
+        sepoliaTxUrl,
       }
     }
 
@@ -294,12 +307,14 @@ export async function executeEnsRegistration(
 
     const explorerUrl = `${ENSV2_HACKATHON_CONFIG.explorerUrl}name/${cleanName}`
     const appUrl = `${ENSV2_HACKATHON_CONFIG.appUrl}name/${cleanName}`
+    const sepoliaTxUrl = result.txHash ? `https://sepolia.etherscan.io/tx/${result.txHash}` : ''
 
     onProgress?.({
       stage: 'confirmed',
       detail: `🎉 ${cleanName} is officially registered and owned!`,
       txHash: result.txHash,
       explorerUrl,
+      sepoliaTxUrl,
     })
 
     return {
@@ -309,6 +324,7 @@ export async function executeEnsRegistration(
       txHash: result.txHash,
       explorerUrl,
       appUrl,
+      sepoliaTxUrl,
     }
   } catch (err: any) {
     onProgress?.({

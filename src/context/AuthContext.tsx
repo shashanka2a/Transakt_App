@@ -12,6 +12,7 @@ export interface UserSession {
 
 interface AuthContextType {
   user: UserSession | null
+  ensName: string
   isAuthenticated: boolean
   isLoading: boolean
   error: string | null
@@ -29,6 +30,7 @@ const DEFAULT_PRIVY_APP_ID = process.env.EXPO_PUBLIC_PRIVY_APP_ID as string
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
+  ensName: 'smithfam.eth',
   isAuthenticated: false,
   isLoading: false,
   error: null,
@@ -64,6 +66,7 @@ function generateSmartAccountAddress(seed: string): string {
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserSession | null>(null)
+  const [registeredEns, setRegisteredEns] = useState<string>('smithfam.eth')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [pendingEmail, setPendingEmail] = useState<string | null>(null)
@@ -253,8 +256,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const setEnsName = (ensName: string) => {
+    setRegisteredEns(ensName)
     if (user) {
       setUser({ ...user, ensName })
+    } else {
+      setUser({
+        id: `usr_${Date.now()}`,
+        address: '0x71C8a27B2f90A2E80562eA9b294D0A38e83f3F9E',
+        ensName,
+        authMethod: 'passkey',
+        createdAt: new Date().toISOString(),
+        isEmbeddedWallet: true,
+      })
     }
   }
 
@@ -268,6 +281,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     <AuthContext.Provider
       value={{
         user,
+        ensName: user?.ensName || registeredEns,
         isAuthenticated: !!user,
         isLoading,
         error,

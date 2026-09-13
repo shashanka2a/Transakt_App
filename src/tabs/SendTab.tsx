@@ -18,6 +18,7 @@ import {
   IconChevronDown,
 } from '../components/Icons'
 import { useTheme } from '../context/ThemeContext'
+import { useAuth } from '../context/AuthContext'
 import { resolveEnsAddress } from '../services/ensv2Client'
 
 const presets = ['$10', '$25', '$50', 'Max']
@@ -36,6 +37,8 @@ interface Props {
 
 export default function SendTab({ onReview, onBack }: Props) {
   const { colors } = useTheme()
+  const { user, ensName } = useAuth()
+  const rootEnsName = user?.ensName || ensName || 'smithfam.eth'
   const [query, setQuery] = useState('')
   const [resolved, setResolved] = useState(false)
   const [resolvedAddr, setResolvedAddr] = useState<string | null>(null)
@@ -86,7 +89,7 @@ export default function SendTab({ onReview, onBack }: Props) {
     if (canSend) {
       onReview({
         amount: `$${amount}`,
-        recipient: query.trim() || 'alex.smithfam.eth',
+        recipient: query.trim() || `alex.${rootEnsName}`,
       })
     }
   }
@@ -169,7 +172,7 @@ export default function SendTab({ onReview, onBack }: Props) {
                 <View style={styles.recipientInfo}>
                   <View style={styles.recipientNameRow}>
                     <Text style={[styles.recipientName, { color: colors.fg }]}>
-                      {query.includes('.') ? query.trim() : `${query.trim() || 'mom'}.smithfam.eth`}
+                      {query.includes('.') ? query.trim() : `${query.trim() || 'mom'}.${rootEnsName}`}
                     </Text>
                     <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
                       <Circle cx="12" cy="12" r="10" fill={colors.accent} />

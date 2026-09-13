@@ -57,6 +57,7 @@ export default function ENSSearchScreen({ onPurchase }: Props) {
     txHash?: string
     explorerUrl?: string
     appUrl?: string
+    sepoliaTxUrl?: string
   }>({})
 
   const rawAddress =
@@ -137,6 +138,7 @@ export default function ENSSearchScreen({ onPurchase }: Props) {
         txHash: res.txHash,
         explorerUrl: res.explorerUrl,
         appUrl: res.appUrl,
+        sepoliaTxUrl: res.sepoliaTxUrl,
       })
 
       setEnsName(selected)
@@ -432,9 +434,30 @@ export default function ENSSearchScreen({ onPurchase }: Props) {
 
             {/* Verification Links */}
             <View style={styles.modalLinksContainer}>
+              {txResult.txHash && txResult.txHash.startsWith('0x') && (
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => Linking.openURL(`https://sepolia.etherscan.io/tx/${txResult.txHash}`)}
+                  style={styles.txVerifyButton}
+                >
+                  <Svg width={13} height={13} viewBox="0 0 24 24" fill="none">
+                    <Path
+                      d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"
+                      stroke="#1D5D3A"
+                      strokeWidth={2}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </Svg>
+                  <Text style={[styles.txVerifyButtonText, { color: '#1D5D3A', fontWeight: '700' }]}>
+                    View Tx on Sepolia Etherscan ↗
+                  </Text>
+                </TouchableOpacity>
+              )}
+
               <TouchableOpacity
                 activeOpacity={0.7}
-                onPress={() => Linking.openURL(`https://sepolia.etherscan.io/address/${rawAddress}`)}
+                onPress={() => Linking.openURL(txResult.explorerUrl || `https://hackathon-deployment-portal-app.ens-cf.workers.dev/name/${selected}`)}
                 style={styles.txVerifyButton}
               >
                 <Svg width={13} height={13} viewBox="0 0 24 24" fill="none">
@@ -447,7 +470,26 @@ export default function ENSSearchScreen({ onPurchase }: Props) {
                   />
                 </Svg>
                 <Text style={styles.txVerifyButtonText}>
-                  Verify Wallet on Etherscan ↗
+                  View on Hackathon ENS Portal ↗
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => Linking.openURL('https://sepolia.etherscan.io/address/0xa3aBDC7f6334CD3EE466A115f30522377787c024')}
+                style={styles.txVerifyButton}
+              >
+                <Svg width={13} height={13} viewBox="0 0 24 24" fill="none">
+                  <Path
+                    d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"
+                    stroke="#888"
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </Svg>
+                <Text style={[styles.txVerifyButtonText, { color: colors.fg3, fontSize: 11 }]}>
+                  View Smart Account (0xa3aB...c024) ↗
                 </Text>
               </TouchableOpacity>
             </View>

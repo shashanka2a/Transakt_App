@@ -70,7 +70,7 @@ function AppShell() {
       )}
 
       {flow === 'ens-search' && (
-        <ENSSearchScreen onPurchase={() => setFlow('ens-dashboard')} />
+        <ENSSearchScreen onPurchase={() => setFlow('app')} />
       )}
 
       {flow === 'ens-dashboard' && (

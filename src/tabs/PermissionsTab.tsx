@@ -42,6 +42,8 @@ const randomHue = () => hues[Math.floor(Math.random() * hues.length)]
 
 export default function PermissionsTab() {
   const { colors } = useTheme()
+  const { user, ensName } = useAuth()
+  const rootEnsName = user?.ensName || ensName || 'smithfam.eth'
   const [accounts, setAccounts] = useState<SubAccount[]>(SEED_ACCOUNTS)
   const [showIssue, setShowIssue] = useState(false)
   const [selectedAccount, setSelectedAccount] = useState<SubAccount | null>(null)
@@ -56,7 +58,7 @@ export default function PermissionsTab() {
     const newAcc: SubAccount = {
       id: name,
       name: name.charAt(0).toUpperCase() + name.slice(1),
-      ens: `${name}.smithfam.eth`,
+      ens: `${name}.${rootEnsName}`,
       role: 'New Member',
       eth: '0.00 ETH',
       fiat: '$0.00',
@@ -109,7 +111,7 @@ export default function PermissionsTab() {
               Manage
             </Text>
             <Text style={[styles.headerSubtitle, { color: colors.fg3 }]}>
-              smithfam.eth
+              {rootEnsName}
             </Text>
           </View>
           <View
@@ -334,7 +336,8 @@ function IssueSubnameWizardSheet({
   onMinted: (name: string) => void
 }) {
   const { colors } = useTheme()
-  const { user } = useAuth()
+  const { user, ensName } = useAuth()
+  const rootEnsName = user?.ensName || ensName || 'smithfam.eth'
   const [step, setStep] = useState<SheetStep>('tutorial')
   const [name, setName] = useState('')
   const [perms, setPerms] = useState<PermItem[]>(DEFAULT_PERMS)
@@ -344,7 +347,7 @@ function IssueSubnameWizardSheet({
   const handleMint = async () => {
     setStep('minting')
     const rawAddress = user?.address || '0x71C8a27B2f90A2E80562eA9b294D0A38e83f3F9E'
-    const result = await mintGaslessSubname('smithfam.eth', name, rawAddress)
+    const result = await mintGaslessSubname(rootEnsName, name, rawAddress)
     
     if (result.success) {
       setStep('success')
@@ -466,7 +469,7 @@ function IssueSubnameWizardSheet({
                         { color: colors.accent },
                       ]}
                     >
-                      smithfam.eth
+                      {rootEnsName}
                     </Text>
                   </View>
                   <TouchableOpacity
@@ -529,7 +532,7 @@ function IssueSubnameWizardSheet({
                           alex
                         </Text>
                         <Text style={[styles.exampleEns, { color: colors.accent }]}>
-                          alex.smithfam.eth
+                          alex.{rootEnsName}
                         </Text>
                       </View>
                       <View style={styles.exampleBadge}>
@@ -567,7 +570,7 @@ function IssueSubnameWizardSheet({
                     {
                       n: '1',
                       title: 'Choose a subname',
-                      body: 'Pick a name like "alex" — it becomes alex.smithfam.eth onchain.',
+                      body: `Pick a name like "alex" — it becomes alex.${rootEnsName} onchain.`,
                     },
                     {
                       n: '2',
@@ -652,7 +655,7 @@ function IssueSubnameWizardSheet({
                       Issue Subname
                     </Text>
                     <Text style={[styles.wizardEns, { color: colors.accent }]}>
-                      smithfam.eth
+                      {rootEnsName}
                     </Text>
                   </View>
                   <TouchableOpacity
@@ -701,12 +704,12 @@ function IssueSubnameWizardSheet({
                     style={[styles.subnameFormInput, { color: colors.fg }]}
                   />
                   <Text style={[styles.subnameSuffixText, { color: colors.fg3 }]}>
-                    .smithfam.eth
+                    .{rootEnsName}
                   </Text>
                 </View>
                 {name.length > 0 && (
                   <Text style={[styles.subnamePreview, { color: colors.accent }]}>
-                    ✓ {name}.smithfam.eth
+                    ✓ {name}.{rootEnsName}
                   </Text>
                 )}
 
@@ -867,7 +870,7 @@ function IssueSubnameWizardSheet({
                   Minting subname…
                 </Text>
                 <Text style={[styles.mintingEns, { color: colors.accent }]}>
-                  {name}.smithfam.eth
+                  {name}.{rootEnsName}
                 </Text>
                 <Text style={[styles.mintingNote, { color: colors.fg3 }]}>
                   Writing to ENSv2 registry · Generating invite link
@@ -902,7 +905,7 @@ function IssueSubnameWizardSheet({
                   Subname Created!
                 </Text>
                 <Text style={[styles.mintingEns, { color: colors.accent }]}>
-                  {name}.smithfam.eth
+                  {name}.{rootEnsName}
                 </Text>
 
                 <View
