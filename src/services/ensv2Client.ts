@@ -1,4 +1,4 @@
-import { createPublicClient, http, formatEther } from 'viem'
+import { createPublicClient, http, formatEther, formatUnits } from 'viem'
 import { normalize } from 'viem/ens'
 import { sepolia } from 'viem/chains'
 import { registerGaslessRootName, mintGaslessSubname } from './pimlicoPaymaster'
@@ -132,37 +132,36 @@ export async function checkEnsAvailability(
       let usdPrice = null
 
       if (available && !isSub) {
-        // Fetch real price from Sepolia ETHRegistrarController
-        const priceData = await ensClient.readContract({
-          address: '0xFED6a969AaA60E4961FCD3EBF1A2e8913ac65B72', // Sepolia Controller
-          abi: [{
-            name: 'rentPrice',
-            type: 'function',
-            stateMutability: 'view',
-            inputs: [
-              { name: 'name', type: 'string' },
-              { name: 'duration', type: 'uint256' }
-            ],
-            outputs: [
+        try {
+          // Fetch actual price from ENSv2 Hackathon Registrar on Sepolia
+          const priceRaw = (await ensClient.readContract({
+            address: '0xa88553f454b77203b0d036a05c894d555eaaa2cc',
+            abi: [
               {
-                name: 'price',
-                type: 'tuple',
-                components: [
-                  { name: 'base', type: 'uint256' },
-                  { name: 'premium', type: 'uint256' }
-                ]
-              }
-            ]
-          }],
-          functionName: 'rentPrice',
-          args: [label, 31536000n], // 1 year in seconds
-        }) as { base: bigint, premium: bigint }
+                name: 'getRegisterPrice',
+                type: 'function',
+                stateMutability: 'view',
+                inputs: [
+                  { name: 'label', type: 'string' },
+                  { name: 'duration', type: 'uint64' },
+                  { name: 'paymentToken', type: 'address' },
+                ],
+                outputs: [{ name: 'amount', type: 'uint256' }],
+              },
+            ],
+            functionName: 'getRegisterPrice',
+            args: [label, 31536000n, '0x768f42455a2d082e23ceef7d51e5787c82d67a39'],
+          })) as bigint
 
-        const totalWei = priceData.base + priceData.premium
-        ethPrice = parseFloat(formatEther(totalWei))
-        usdPrice = ethPrice * ETH_USD
+          usdPrice = parseFloat(formatUnits(priceRaw, 6))
+          ethPrice = usdPrice / ETH_USD
+        } catch {
+          // Standard fallback pricing based on label length
+          usdPrice = label.length === 3 ? 640 : label.length === 4 ? 160 : 8.0
+          ethPrice = usdPrice / ETH_USD
+        }
       } else if (available && isSub) {
-        // Subnames are sponsored/gasless and free to mint in this prototype
+        // Subnames are sponsored and gasless
         ethPrice = 0
         usdPrice = 0
       }
@@ -179,8 +178,8 @@ export async function checkEnsAvailability(
       results.push({
         name,
         available: true,
-        usdPrice: 12.0,
-        ethPrice: 12.0 / ETH_USD,
+        usdPrice: 8.0,
+        ethPrice: 8.0 / ETH_USD,
         isSubname: name.split('.').length > 2,
       })
     }

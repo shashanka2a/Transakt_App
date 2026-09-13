@@ -119,51 +119,6 @@ export function generateSmartAccountAddress(seed: string): string {
   return `0x${(hex1 + hex2 + hex3 + hex4 + hex5).slice(0, 40)}`
 }
 
-const DEFAULT_STARTER_SUBACCOUNTS = (root: string): SubAccount[] => [
-  {
-    id: 'sub_pay_default',
-    name: 'Daily Pocket',
-    ens: `pay.${root}`,
-    email: 'alex@transakt.app',
-    address: '0x3F8a92e104dB2D9B387799147D3bEf32A606Ea38',
-    role: 'Limit: $50/tx',
-    eth: '0.12 ETH',
-    fiat: '$342.80',
-    badge: 'ACTIVE',
-    hex: '#1DB563',
-    badgeBg: 'rgba(29,181,99,0.12)',
-    badgeBorder: 'rgba(29,181,99,0.28)',
-    initials: 'PA',
-    avatarHue: '150',
-    weeklyLimit: '$250/week',
-    autoDrop: 'Weekly',
-    canSend: true,
-    canEditProfile: true,
-    inviteLink: `https://transakt.app/join?ens=pay.${root}&email=alex@transakt.app`,
-  },
-  {
-    id: 'sub_vault_default',
-    name: 'College Vault',
-    ens: `vault.${root}`,
-    email: 'vault@transakt.app',
-    address: '0x71C8a27B2f90A2E80562eA9b294D0A38e83f3F9E',
-    role: 'Parent Locked',
-    eth: '1.20 ETH',
-    fiat: '$3,428.00',
-    badge: 'LOCKED',
-    hex: '#FFB830',
-    badgeBg: 'rgba(255,184,48,0.12)',
-    badgeBorder: 'rgba(255,184,48,0.28)',
-    initials: 'VA',
-    avatarHue: '30',
-    weeklyLimit: '$0/week',
-    autoDrop: 'None',
-    canSend: false,
-    canEditProfile: false,
-    inviteLink: `https://transakt.app/join?ens=vault.${root}&email=vault@transakt.app`,
-  },
-]
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserSession | null>(() => {
     const cached = storage.get('transakt_user_session')
@@ -193,13 +148,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (cached) {
       try {
         const parsed = JSON.parse(cached)
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed
+        if (Array.isArray(parsed)) {
+          return parsed.filter((a: SubAccount) => !a.id?.includes('_default'))
+        }
       } catch {}
     }
-    const initialRoot = storage.get('transakt_ens_name') || 'hash.eth'
-    const starter = DEFAULT_STARTER_SUBACCOUNTS(initialRoot)
-    storage.set('transakt_subaccounts', JSON.stringify(starter))
-    return starter
+    return []
   })
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)

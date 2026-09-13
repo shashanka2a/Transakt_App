@@ -40,8 +40,8 @@ export default function ENSSearchScreen({ onPurchase }: Props) {
   const [query, setQuery] = useState('smith')
   const [state, setState] = useState<ResultState>('results')
   const [results, setResults] = useState<EnsNameCheckResult[]>([
-    { name: 'smithfam.eth', available: true, usdPrice: 0, ethPrice: 0, isSubname: false },
-    { name: 'smithpay.eth', available: true, usdPrice: 0, ethPrice: 0, isSubname: false },
+    { name: 'smithfam.eth', available: true, usdPrice: 8.0, ethPrice: 8.0 / 3240, isSubname: false },
+    { name: 'smithpay.eth', available: true, usdPrice: 8.0, ethPrice: 8.0 / 3240, isSubname: false },
     { name: 'smith.eth', available: false, usdPrice: null, ethPrice: null, isSubname: false },
   ])
   const [selected, setSelected] = useState('smithfam.eth')
@@ -166,11 +166,13 @@ export default function ENSSearchScreen({ onPurchase }: Props) {
           <View
             style={[
               styles.stepBadge,
-              { backgroundColor: 'rgba(29, 93, 58, 0.12)', borderColor: 'rgba(29, 93, 58, 0.25)' },
+              { backgroundColor: 'rgba(29, 181, 99, 0.12)', borderColor: 'rgba(29, 181, 99, 0.3)' },
             ]}
           >
             <View style={styles.activeDot} />
-            <Text style={styles.stepBadgeText}>Free ENS Onboarding</Text>
+            <Text style={[styles.stepBadgeText, { color: '#1DB563' }]}>
+              Transakt Signup Bonus · 100% Free
+            </Text>
           </View>
 
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -206,6 +208,29 @@ export default function ENSSearchScreen({ onPurchase }: Props) {
         <Text style={[styles.subtitle, { color: colors.fg3 }]}>
           Your root ENS name is the master address for your treasury.
         </Text>
+
+        {/* ── Transakt Signup Bonus Banner ── */}
+        <View
+          style={[
+            styles.bonusCard,
+            {
+              backgroundColor: 'rgba(29, 181, 99, 0.08)',
+              borderColor: 'rgba(29, 181, 99, 0.24)',
+            },
+          ]}
+        >
+          <View style={styles.bonusIconCircle}>
+            <Text style={{ fontSize: 16 }}>🎁</Text>
+          </View>
+          <View style={styles.bonusTextContainer}>
+            <Text style={[styles.bonusTitle, { color: colors.fg }]}>
+              Claim your ENS name for free via Transakt as signup bonus
+            </Text>
+            <Text style={[styles.bonusSubtitle, { color: colors.fg2 }]}>
+              ENSv2 Hackathon protocol price (${(selectedResult?.usdPrice ?? 8).toFixed(2)} USDC/yr) + gas 100% sponsored by Transakt.
+            </Text>
+          </View>
+        </View>
       </View>
 
       <ScrollView
@@ -300,8 +325,16 @@ export default function ENSSearchScreen({ onPurchase }: Props) {
                 </View>
 
                 {r.available ? (
-                  <View style={styles.freeBadge}>
-                    <Text style={styles.freeBadgeText}>FREE</Text>
+                  <View style={styles.priceCol}>
+                    <View style={styles.priceRow}>
+                      <Text style={[styles.originalPriceText, { color: colors.fg3 }]}>
+                        ${(r.usdPrice ?? 8).toFixed(2)}
+                      </Text>
+                      <View style={styles.freeBadge}>
+                        <Text style={styles.freeBadgeText}>$0.00</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.freeBonusLabel}>Signup Bonus</Text>
                   </View>
                 ) : (
                   <Text style={[styles.takenText, { color: colors.fg3 }]}>Taken</Text>
@@ -323,7 +356,7 @@ export default function ENSSearchScreen({ onPurchase }: Props) {
             />
           </Svg>
           <Text style={[styles.sponsorshipText, { color: colors.fg3 }]}>
-            Sponsored by Transakt Gas Manager · Zero gas fees
+            Protocol price & gas fully covered via Transakt Signup Bonus
           </Text>
         </View>
 
@@ -356,11 +389,19 @@ export default function ENSSearchScreen({ onPurchase }: Props) {
         >
           <View style={styles.bottomBarInfo}>
             <Text style={[styles.selectedLabel, { color: colors.fg3 }]}>
-              Selected Handle
+              Selected Handle · Signup Bonus
             </Text>
-            <Text style={[styles.selectedName, { color: colors.fg }]}>
-              {selectedResult.name}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+              <Text style={[styles.selectedName, { color: colors.fg }]}>
+                {selectedResult.name}
+              </Text>
+              <Text style={[styles.struckPriceBottom, { color: colors.fg3 }]}>
+                ${(selectedResult.usdPrice ?? 8).toFixed(2)}
+              </Text>
+              <Text style={styles.freePriceBottom}>
+                $0.00
+              </Text>
+            </View>
           </View>
 
           <TouchableOpacity
@@ -368,7 +409,7 @@ export default function ENSSearchScreen({ onPurchase }: Props) {
             onPress={handleExecuteRegistration}
             style={styles.claimButton}
           >
-            <Text style={styles.claimButtonText}>Claim Identity →</Text>
+            <Text style={styles.claimButtonText}>Claim Free ENS →</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -587,6 +628,37 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
   },
+  bonusCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginTop: 6,
+  },
+  bonusIconCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(29, 181, 99, 0.16)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bonusTextContainer: {
+    flex: 1,
+  },
+  bonusTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    lineHeight: 16,
+  },
+  bonusSubtitle: {
+    fontSize: 11,
+    fontWeight: '500',
+    marginTop: 2,
+    lineHeight: 15,
+  },
   scrollView: {
     flex: 1,
   },
@@ -649,6 +721,27 @@ const styles = StyleSheet.create({
   resultSubtitle: {
     fontSize: 11,
     marginTop: 2,
+  },
+  priceCol: {
+    alignItems: 'flex-end',
+    gap: 2,
+  },
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  originalPriceText: {
+    fontSize: 12,
+    fontWeight: '700',
+    textDecorationLine: 'line-through',
+  },
+  freeBonusLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#1DB563',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   freeBadge: {
     backgroundColor: '#1D5D3A',
@@ -714,7 +807,16 @@ const styles = StyleSheet.create({
   selectedName: {
     fontSize: 16,
     fontWeight: '900',
-    marginTop: 1,
+  },
+  struckPriceBottom: {
+    fontSize: 13,
+    fontWeight: '700',
+    textDecorationLine: 'line-through',
+  },
+  freePriceBottom: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#1DB563',
   },
   claimButton: {
     backgroundColor: '#1D5D3A',

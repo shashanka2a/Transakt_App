@@ -18,9 +18,6 @@ import {
   IconSend,
   IconRequest,
   IconUsers,
-  IconCreditCard,
-  IconGradCap,
-  IconRefresh,
   IconSun,
   IconMoon,
   IconSwap,
@@ -34,48 +31,6 @@ import {
   isValidEthereumAddress,
 } from '../services/sepoliaRpc'
 
-const nodes = [
-  {
-    id: 'daily',
-    name: 'Daily Pocket',
-    eth: '0.12 ETH',
-    fiat: '$342.80',
-    meta: 'Managed by Alex',
-    badge: 'ACTIVE',
-    colorKey: 'success',
-    Icon: IconCreditCard,
-    bar: 34,
-    spent: '$96.20',
-    limit: '$250',
-  },
-  {
-    id: 'college',
-    name: 'College Vault',
-    eth: '1.20 ETH',
-    fiat: '$3,428.00',
-    meta: 'Parent Locked',
-    badge: 'LOCKED',
-    colorKey: 'amber',
-    Icon: IconGradCap,
-    bar: 88,
-    spent: '$3,020.00',
-    limit: '$3,500',
-  },
-  {
-    id: 'allowance',
-    name: 'Allowance Node',
-    eth: '0.04 ETH',
-    fiat: '$114.27',
-    meta: 'Refills in 3 days',
-    badge: 'AUTO',
-    colorKey: 'fg3',
-    Icon: IconRefresh,
-    bar: 12,
-    spent: '$14.27',
-    limit: '$128',
-  },
-]
-
 interface Props {
   onNavigate: (t: Tab) => void
   onOpenRequest: () => void
@@ -88,7 +43,7 @@ export default function HomeTab({
   onOpenSwap,
 }: Props) {
   const { theme, colors, toggle } = useTheme()
-  const { user, ensName, subAccounts, logout } = useAuth()
+  const { user, ensName, logout } = useAuth()
   const [liveBalance, setLiveBalance] = useState<number | null>(null)
   const [liveTransfers, setLiveTransfers] = useState<OnchainTransfer[]>([])
   const [isLoadingTransfers, setIsLoadingTransfers] = useState(false)
@@ -304,48 +259,6 @@ export default function HomeTab({
           </View>
         </View>
 
-        {/* Family Nodes Horizontal Cards */}
-        <View style={styles.nodesSection}>
-          <View style={styles.sectionHeaderRow}>
-            <Text style={[styles.sectionTitle, { color: colors.fg3 }]}>
-              Family Nodes
-            </Text>
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={() => onNavigate('permissions')}
-            >
-              <Text style={[styles.sectionActionText, { color: colors.accent }]}>
-                Manage →
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.horizontalNodesScroll}
-          >
-            {subAccounts.map((acc) => (
-              <NodeCard
-                key={acc.id}
-                node={{
-                  id: acc.id,
-                  name: acc.name,
-                  eth: acc.eth || '0.00 ETH',
-                  fiat: acc.fiat || '$0.00',
-                  meta: acc.email ? `✉️ ${acc.email}` : (acc.weeklyLimit ? `Limit: ${acc.weeklyLimit}` : acc.role),
-                  badge: (acc.badge === 'INVITED' ? 'ACTIVE' : acc.badge) as any,
-                  colorKey: acc.badge === 'LOCKED' ? 'amber' : 'success',
-                  Icon: acc.badge === 'LOCKED' ? IconGradCap : IconCreditCard,
-                  bar: acc.badge === 'LOCKED' ? 88 : 34,
-                  spent: '$0.00',
-                  limit: acc.weeklyLimit || '$250',
-                }}
-              />
-            ))}
-          </ScrollView>
-        </View>
-
         {/* Recent Activity (Actual Live Transactions) */}
         <View style={styles.activitySection}>
           <View style={styles.sectionHeaderRow}>
@@ -492,98 +405,6 @@ export default function HomeTab({
   )
 }
 
-type NodeData = (typeof nodes)[number]
-
-function NodeCard({ node }: { node: NodeData }) {
-  const { colors } = useTheme()
-  const barAnim = useRef(new Animated.Value(0)).current
-
-  useEffect(() => {
-    Animated.timing(barAnim, {
-      toValue: node.bar / 100,
-      duration: 900,
-      useNativeDriver: false,
-    }).start()
-  }, [barAnim, node.bar])
-
-  const barWidth = barAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0%', '100%'],
-  })
-
-  // Extract the actual hex color from the theme based on colorKey
-  const nodeColor = colors[node.colorKey as keyof typeof colors] || colors.accent
-
-  // Generate transparent variants for backgrounds using hex opacity (1E = ~12%, 40 = ~25%)
-  const badgeBg = nodeColor + '1E'
-  const badgeBorder = nodeColor + '40'
-  const iconBg = nodeColor + '20'
-
-  return (
-    <View
-      style={[
-        styles.nodeCard,
-        {
-          backgroundColor: colors.surface,
-          borderColor: colors.border,
-        },
-      ]}
-    >
-      <View style={styles.nodeCardTop}>
-        <View style={[styles.nodeIconCircle, { backgroundColor: iconBg }]}>
-          <node.Icon size={20} color={nodeColor} />
-        </View>
-        <View
-          style={[
-            styles.nodeBadgePill,
-            {
-              backgroundColor: badgeBg,
-              borderColor: badgeBorder,
-            },
-          ]}
-        >
-          <Text style={[styles.nodeBadgeText, { color: nodeColor }]}>
-            {node.badge}
-          </Text>
-        </View>
-      </View>
-
-      <Text
-        numberOfLines={1}
-        style={[styles.nodeCardName, { color: colors.fg2 }]}
-      >
-        {node.name}
-      </Text>
-      <Text style={[styles.nodeCardEth, { color: colors.fg }]}>{node.eth}</Text>
-      <Text style={[styles.nodeCardFiat, { color: colors.fg3 }]}>{node.fiat}</Text>
-
-      {/* Progress bar */}
-      <View style={styles.progressContainer}>
-        <View style={[styles.progressTrack, { backgroundColor: colors.raised }]}>
-          <Animated.View
-            style={[
-              styles.progressFill,
-              { width: barWidth, backgroundColor: nodeColor },
-            ]}
-          />
-        </View>
-        <View style={styles.progressLabels}>
-          <Text style={[styles.progressVal, { color: colors.fg3 }]}>
-            {node.spent}
-          </Text>
-          <Text style={[styles.progressVal, { color: colors.fg3 }]}>
-            {node.limit}
-          </Text>
-        </View>
-      </View>
-
-      <Text style={[styles.nodeMetaText, { color: colors.fg3 }]}>
-        {node.meta}
-      </Text>
-    </View>
-  )
-}
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -699,9 +520,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-  nodesSection: {
-    marginBottom: 28,
-  },
   sectionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -718,81 +536,6 @@ const styles = StyleSheet.create({
   sectionActionText: {
     fontSize: 12,
     fontWeight: '700',
-  },
-  horizontalNodesScroll: {
-    paddingHorizontal: 24,
-    gap: 12,
-  },
-  nodeCard: {
-    width: 180,
-    borderRadius: 20,
-    borderWidth: 1,
-    padding: 16,
-  },
-  nodeCardTop: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    marginBottom: 14,
-  },
-  nodeIconCircle: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  nodeBadgePill: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  nodeBadgeText: {
-    fontSize: 8,
-    fontWeight: '900',
-    letterSpacing: 1,
-  },
-  nodeCardName: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginBottom: 2,
-  },
-  nodeCardEth: {
-    fontSize: 18,
-    fontWeight: '900',
-    letterSpacing: -0.5,
-  },
-  nodeCardFiat: {
-    fontSize: 12,
-    fontWeight: '500',
-    marginBottom: 12,
-  },
-  progressContainer: {
-    marginBottom: 8,
-  },
-  progressTrack: {
-    height: 6,
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 3,
-  },
-  progressLabels: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 4,
-  },
-  progressVal: {
-    fontSize: 10,
-    fontWeight: '500',
-  },
-  nodeMetaText: {
-    fontSize: 11,
-    fontWeight: '600',
   },
   activitySection: {
     paddingHorizontal: 24,
